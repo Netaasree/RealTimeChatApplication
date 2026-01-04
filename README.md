@@ -4,32 +4,32 @@ A real-time chat application built using the MERN stack and Socket.IO 🚀
 
 ✨ Features
 
-🔐 User authentication (JWT)
+    🔐 User authentication (JWT)
 
-💬 Real-time messaging
+    💬 Real-time messaging
 
-✍️ Typing indicator
+    ✍️ Typing indicator
 
-📜 Auto-scroll chat
+    📜 Auto-scroll chat
 
 🛠️ Tech Stack
 
-🍃 MongoDB
+    🍃 MongoDB
 
-⚡ Express.js
+    ⚡ Express.js
 
-⚛️ React.js
+    ⚛️ React.js
 
-🟢 Node.js
+    🟢 Node.js
 
-🔄 Socket.IO
+    🔄 Socket.IO
 
 ▶️ How to Run
 
-📥 Clone the repository
+    📥 Clone the repository
 
-📦 Run npm install in both backend and frontend
+    📦 Run npm install in both backend and frontend
 
-🔑 Add .env file in backend
+    🔑 Add .env file in backend
 
 ▶️ Start backend & frontend servers
