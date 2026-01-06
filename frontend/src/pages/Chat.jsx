@@ -225,7 +225,7 @@ function Chat() {
         {selectedChat ? (
           <>
             <div className="p-4 border-b bg-white font-bold">
-              Chat with {chatUser?.name}
+              {chatUser?.name}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
