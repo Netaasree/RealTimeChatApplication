@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { socket } from "../socket";
 import { useAuth } from "../context/AuthContext";
@@ -6,17 +7,18 @@ import { useAuth } from "../context/AuthContext";
 function Chat() {
   const { user } = useAuth();
   const userInfo = user;
+  const navigate = useNavigate();
 
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [content, setContent] = useState("");
 
-  // 🔍 search
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
 
   const [typingUser, setTypingUser] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   const selectedChatRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -25,13 +27,38 @@ function Chat() {
 
   /* 🔌 CONNECT SOCKET */
   useEffect(() => {
-    if (!socket.connected) {
+    if (userInfo && !socket.connected) {
       socket.connect();
       socket.emit("setup", userInfo);
     }
   }, [userInfo]);
 
-  /* 🔁 KEEP CHAT REF */
+  /* 🟢 ONLINE / OFFLINE */
+  useEffect(() => {
+    socket.on("online users", (users) => {
+      setOnlineUsers(users);
+    });
+
+    socket.on("user online", (userId) => {
+      setOnlineUsers((prev) =>
+        prev.includes(userId) ? prev : [...prev, userId]
+      );
+    });
+
+    socket.on("user offline", (userId) => {
+      setOnlineUsers((prev) => prev.filter((id) => id !== userId));
+    });
+
+    return () => {
+      socket.off("online users");
+      socket.off("user online");
+      socket.off("user offline");
+    };
+  }, []);
+
+  const isUserOnline = (userId) => onlineUsers.includes(userId);
+
+  /* 🔁 CHAT REF */
   useEffect(() => {
     selectedChatRef.current = selectedChat;
   }, [selectedChat]);
@@ -39,11 +66,11 @@ function Chat() {
   /* 📩 RECEIVE MESSAGE */
   useEffect(() => {
     const handleMessage = (newMessage) => {
-      const currentChat = selectedChatRef.current;
-      if (!currentChat) return;
-      if (newMessage.sender._id === userInfo._id) return;
-
-      if (newMessage.chat._id === currentChat._id) {
+      if (
+        selectedChatRef.current &&
+        newMessage.chat._id === selectedChatRef.current._id &&
+        newMessage.sender._id !== userInfo._id
+      ) {
         setMessages((prev) => [...prev, newMessage]);
       }
     };
@@ -55,19 +82,13 @@ function Chat() {
   /* ✍️ TYPING */
   useEffect(() => {
     socket.on("typing", ({ chatId, userName }) => {
-      if (
-        selectedChatRef.current &&
-        selectedChatRef.current._id === chatId
-      ) {
+      if (selectedChatRef.current?._id === chatId) {
         setTypingUser(userName);
       }
     });
 
     socket.on("stop typing", ({ chatId }) => {
-      if (
-        selectedChatRef.current &&
-        selectedChatRef.current._id === chatId
-      ) {
+      if (selectedChatRef.current?._id === chatId) {
         setTypingUser(null);
       }
     });
@@ -94,7 +115,6 @@ function Chat() {
     const fetchMessages = async () => {
       const { data } = await API.get(`/message/${selectedChat._id}`);
       setMessages(data);
-      setTypingUser(null);
       socket.emit("join chat", selectedChat._id);
     };
 
@@ -127,7 +147,6 @@ function Chat() {
   /* ✍️ HANDLE TYPING */
   const handleTyping = (e) => {
     setContent(e.target.value);
-    if (!selectedChat) return;
 
     if (!typingRef.current) {
       typingRef.current = true;
@@ -151,7 +170,6 @@ function Chat() {
       setSearchResults([]);
       return;
     }
-
     const { data } = await API.get(`/users?search=${query}`);
     setSearchResults(data);
   };
@@ -169,37 +187,44 @@ function Chat() {
     setSearchResults([]);
   };
 
+  /* 🚪 LOGOUT (100% SAFE) */
+  const handleLogout = () => {
+    socket.emit("logout", userInfo._id);
+    socket.disconnect();
+    localStorage.clear();
+    navigate("/", { replace: true });
+  };
+
+  /* 👤 OTHER USER IN CHAT (FIXED _id BUG) */
   const chatUser = selectedChat?.users.find(
     (u) => u._id !== userInfo._id
   );
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
       {/* LEFT */}
       <div className="w-1/4 bg-white border-r p-4">
-        <h2 className="font-bold text-indigo-700 mb-2">My Chats</h2>
+        <h2 className="text-lg font-bold text-indigo-700 mb-4">
+          💬 My Chats
+        </h2>
 
-        {/* 🔍 SEARCH BAR */}
         <input
-          type="text"
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder="Search users..."
-          className="w-full border rounded px-3 py-2 mb-3"
+          className="w-full border rounded-full px-4 py-2 mb-4"
         />
 
-        {/* SEARCH RESULTS */}
         {searchResults.map((u) => (
           <div
             key={u._id}
             onClick={() => accessChat(u._id)}
-            className="p-2 rounded cursor-pointer hover:bg-indigo-100"
+            className="p-2 rounded-lg cursor-pointer hover:bg-indigo-100"
           >
             {u.name}
           </div>
         ))}
 
-        {/* CHAT LIST */}
         {chats.map((chat) => {
           const other = chat.users.find(
             (u) => u._id !== userInfo._id
@@ -208,13 +233,16 @@ function Chat() {
             <div
               key={chat._id}
               onClick={() => setSelectedChat(chat)}
-              className={`p-3 rounded cursor-pointer mb-2 ${
-                selectedChat?._id === chat._id
-                  ? "bg-indigo-100"
-                  : "hover:bg-gray-100"
-              }`}
+              className="p-3 rounded-lg mb-2 flex justify-between hover:bg-gray-100"
             >
-              {other?.name}
+              <span>{other?.name}</span>
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isUserOnline(other?._id)
+                    ? "bg-green-500"
+                    : "bg-gray-400"
+                }`}
+              />
             </div>
           );
         })}
@@ -224,8 +252,24 @@ function Chat() {
       <div className="w-3/4 flex flex-col">
         {selectedChat ? (
           <>
-            <div className="p-4 border-b bg-white font-bold">
-              Chat with {chatUser?.name}
+            <div className="p-4 bg-white border-b flex justify-between">
+              <div>
+                <div className="font-bold text-lg">
+                  {chatUser?.name}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {isUserOnline(chatUser?._id)
+                    ? "Online 🟢"
+                    : "Offline ⚪"}
+                </div>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="text-red-500 hover:text-red-700"
+              >
+                Logout
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -235,7 +279,7 @@ function Chat() {
                   className={`max-w-[60%] px-4 py-2 rounded-xl ${
                     msg.sender._id === userInfo._id
                       ? "bg-indigo-600 text-white ml-auto"
-                      : "bg-gray-200"
+                      : "bg-white"
                   }`}
                 >
                   {msg.content}
@@ -252,13 +296,13 @@ function Chat() {
 
             <form
               onSubmit={sendMessage}
-              className="p-4 border-t bg-white flex gap-2"
+              className="p-4 bg-white border-t flex gap-2"
             >
               <input
                 className="flex-1 border rounded-full px-4 py-2"
                 value={content}
                 onChange={handleTyping}
-                placeholder="Type message..."
+                placeholder="Type a message..."
               />
               <button className="bg-indigo-600 text-white px-6 rounded-full">
                 Send
@@ -274,7 +318,5 @@ function Chat() {
     </div>
   );
 }
-
-/*I will add some more features*/
 
 export default Chat;
