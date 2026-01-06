@@ -275,4 +275,6 @@ function Chat() {
   );
 }
 
+/*I will add some more features*/
+
 export default Chat;
