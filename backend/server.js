@@ -16,7 +16,9 @@ connectDB();
 
 const app = express();
 
-/* API CORS */
+/* =======================
+   API CORS
+======================= */
 app.use(
   cors({
     origin: [
@@ -29,6 +31,9 @@ app.use(
 
 app.use(express.json());
 
+/* =======================
+   ROUTES
+======================= */
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
@@ -41,7 +46,9 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
-/* SOCKET.IO */
+/* =======================
+   SOCKET.IO
+======================= */
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
@@ -56,6 +63,7 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("Socket connected:", socket.id);
 
+  /* 🔌 SETUP */
   socket.on("setup", (userData) => {
     socket.join(userData._id);
     onlineUsers.set(userData._id, socket.id);
@@ -64,22 +72,30 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("user online", userData._id);
   });
 
+  /* 💬 JOIN CHAT */
   socket.on("join chat", (chatId) => {
     socket.join(chatId);
   });
 
+  /* 📩 NEW MESSAGE (FIXED & SAFE) */
   socket.on("new message", (newMessage) => {
     const chat = newMessage.chat;
-    if (!chat.users) return;
+    if (!chat || !chat.users) return;
 
-    chat.users.forEach((user) => {
-      if (user._id.toString() === newMessage.sender._id.toString())
-        return;
+    chat.users.forEach((u) => {
+      // handle both populated objects & ObjectIds
+      const userId =
+        typeof u === "object" && u._id
+          ? u._id.toString()
+          : u.toString();
 
-      socket.to(user._id).emit("message received", newMessage);
+      if (userId === newMessage.sender._id.toString()) return;
+
+      socket.to(userId).emit("message received", newMessage);
     });
   });
 
+  /* ✍️ TYPING */
   socket.on("typing", ({ chatId, userName }) => {
     socket.to(chatId).emit("typing", { chatId, userName });
   });
@@ -88,11 +104,13 @@ io.on("connection", (socket) => {
     socket.to(chatId).emit("stop typing", { chatId });
   });
 
+  /* 🚪 LOGOUT */
   socket.on("logout", (userId) => {
     onlineUsers.delete(userId);
     socket.broadcast.emit("user offline", userId);
   });
 
+  /* ❌ DISCONNECT */
   socket.on("disconnect", () => {
     for (let [userId, socketId] of onlineUsers.entries()) {
       if (socketId === socket.id) {
@@ -101,6 +119,7 @@ io.on("connection", (socket) => {
         break;
       }
     }
+    console.log("Socket disconnected:", socket.id);
   });
 });
 
