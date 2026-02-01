@@ -25,12 +25,19 @@ function Chat() {
   const typingTimeoutRef = useRef(null);
   const typingRef = useRef(false);
 
-  /* 🔌 CONNECT SOCKET */
+  /* 🔌 SOCKET CONNECT (SAFE) */
   useEffect(() => {
-    if (userInfo && !socket.connected) {
-      socket.connect();
+    if (!userInfo) return;
+
+    socket.connect();
+
+    socket.on("connect", () => {
       socket.emit("setup", userInfo);
-    }
+    });
+
+    return () => {
+      socket.off("connect");
+    };
   }, [userInfo]);
 
   /* 🟢 ONLINE / OFFLINE */
@@ -63,13 +70,12 @@ function Chat() {
     selectedChatRef.current = selectedChat;
   }, [selectedChat]);
 
-  /* 📩 RECEIVE MESSAGE */
+  /* 📩 RECEIVE MESSAGE (REALTIME FIXED) */
   useEffect(() => {
     const handleMessage = (newMessage) => {
       if (
         selectedChatRef.current &&
-        newMessage.chat._id === selectedChatRef.current._id &&
-        newMessage.sender._id !== userInfo._id
+        newMessage.chat._id === selectedChatRef.current._id
       ) {
         setMessages((prev) => [...prev, newMessage]);
       }
@@ -77,7 +83,7 @@ function Chat() {
 
     socket.on("message received", handleMessage);
     return () => socket.off("message received", handleMessage);
-  }, [userInfo]);
+  }, []);
 
   /* ✍️ TYPING */
   useEffect(() => {
@@ -108,9 +114,9 @@ function Chat() {
     fetchChats();
   }, []);
 
-  /* 📥 FETCH MESSAGES */
+  /* 📥 FETCH MESSAGES + JOIN ROOM (SAFE) */
   useEffect(() => {
-    if (!selectedChat) return;
+    if (!selectedChat || !socket.connected) return;
 
     const fetchMessages = async () => {
       const { data } = await API.get(`/message/${selectedChat._id}`);
@@ -147,6 +153,7 @@ function Chat() {
   /* ✍️ HANDLE TYPING */
   const handleTyping = (e) => {
     setContent(e.target.value);
+    if (!selectedChat) return;
 
     if (!typingRef.current) {
       typingRef.current = true;
@@ -174,7 +181,7 @@ function Chat() {
     setSearchResults(data);
   };
 
-  /* ➕ CREATE / OPEN CHAT */
+  /* ➕ ACCESS CHAT */
   const accessChat = async (userId) => {
     const { data } = await API.post("/chat", { userId });
 
@@ -187,7 +194,7 @@ function Chat() {
     setSearchResults([]);
   };
 
-  /* 🚪 LOGOUT (100% SAFE) */
+  /* 🚪 LOGOUT */
   const handleLogout = () => {
     socket.emit("logout", userInfo._id);
     socket.disconnect();
@@ -195,31 +202,27 @@ function Chat() {
     navigate("/", { replace: true });
   };
 
-  /* 👤 OTHER USER IN CHAT (FIXED _id BUG) */
   const chatUser = selectedChat?.users.find(
     (u) => u._id !== userInfo._id
   );
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
-      {/* LEFT */}
+    <div className="flex h-screen bg-gray-50">
       <div className="w-1/4 bg-white border-r p-4">
-        <h2 className="text-lg font-bold text-indigo-700 mb-4">
-          💬 My Chats
-        </h2>
+        <h2 className="font-bold text-indigo-700 mb-3">My Chats</h2>
 
         <input
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder="Search users..."
-          className="w-full border rounded-full px-4 py-2 mb-4"
+          className="w-full border rounded px-3 py-2 mb-3"
         />
 
         {searchResults.map((u) => (
           <div
             key={u._id}
             onClick={() => accessChat(u._id)}
-            className="p-2 rounded-lg cursor-pointer hover:bg-indigo-100"
+            className="p-2 cursor-pointer hover:bg-indigo-100 rounded"
           >
             {u.name}
           </div>
@@ -233,7 +236,7 @@ function Chat() {
             <div
               key={chat._id}
               onClick={() => setSelectedChat(chat)}
-              className="p-3 rounded-lg mb-2 flex justify-between hover:bg-gray-100"
+              className="p-2 flex justify-between items-center cursor-pointer hover:bg-gray-100 rounded"
             >
               <span>{other?.name}</span>
               <span
@@ -248,38 +251,32 @@ function Chat() {
         })}
       </div>
 
-      {/* RIGHT */}
       <div className="w-3/4 flex flex-col">
         {selectedChat ? (
           <>
             <div className="p-4 bg-white border-b flex justify-between">
               <div>
-                <div className="font-bold text-lg">
-                  {chatUser?.name}
-                </div>
+                <div className="font-bold">{chatUser?.name}</div>
                 <div className="text-sm text-gray-500">
-                  {isUserOnline(chatUser?._id)
-                    ? "Online 🟢"
-                    : "Offline ⚪"}
+                  {isUserOnline(chatUser?._id) ? "Online 🟢" : "Offline ⚪"}
                 </div>
               </div>
-
               <button
                 onClick={handleLogout}
-                className="text-red-500 hover:text-red-700"
+                className="text-red-500"
               >
                 Logout
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4">
               {messages.map((msg) => (
                 <div
                   key={msg._id}
-                  className={`max-w-[60%] px-4 py-2 rounded-xl ${
+                  className={`max-w-[60%] px-4 py-2 rounded mb-2 ${
                     msg.sender._id === userInfo._id
                       ? "bg-indigo-600 text-white ml-auto"
-                      : "bg-white"
+                      : "bg-gray-200"
                   }`}
                 >
                   {msg.content}
@@ -299,18 +296,18 @@ function Chat() {
               className="p-4 bg-white border-t flex gap-2"
             >
               <input
-                className="flex-1 border rounded-full px-4 py-2"
                 value={content}
                 onChange={handleTyping}
-                placeholder="Type a message..."
+                className="flex-1 border rounded px-4 py-2"
+                placeholder="Type message..."
               />
-              <button className="bg-indigo-600 text-white px-6 rounded-full">
+              <button className="bg-indigo-600 text-white px-5 rounded">
                 Send
               </button>
             </form>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 text-xl">
+          <div className="flex-1 flex items-center justify-center text-gray-400">
             Welcome to Chat 🚀
           </div>
         )}
