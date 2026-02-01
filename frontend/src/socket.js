@@ -1,5 +1,9 @@
 import { io } from "socket.io-client";
 
-export const socket = io(import.meta.env.VITE_API_URL, {
+const ENDPOINT = import.meta.env.VITE_API_URL;
+
+export const socket = io(ENDPOINT, {
   autoConnect: false,
+  withCredentials: true,
+  transports: ["websocket"],
 });
