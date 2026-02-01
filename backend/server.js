@@ -23,7 +23,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173", // local frontend
-      "https://realtimechatapplication.vercel.app", // deployed frontend (update if name differs)
+      "https://real-time-chat-application-gilt-nine.vercel.app", // deployed frontend (update if name differs)
     ],
     credentials: true,
   })
