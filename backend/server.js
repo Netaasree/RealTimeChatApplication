@@ -16,15 +16,24 @@ connectDB();
 
 const app = express();
 
+/* =======================
+   CORS CONFIG (API)
+======================= */
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173", // local frontend
+      "https://realtimechatapplication.vercel.app", // deployed frontend (update if name differs)
+    ],
     credentials: true,
   })
 );
 
 app.use(express.json());
 
+/* =======================
+   ROUTES
+======================= */
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
@@ -37,9 +46,17 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
+/* =======================
+   SOCKET.IO CONFIG
+======================= */
 const io = new Server(server, {
   pingTimeout: 60000,
-  cors: { origin: "*" },
+  cors: {
+    origin: [
+      "http://localhost:5173",
+      "https://realtimechatapplication.vercel.app",
+    ],
+  },
 });
 
 io.on("connection", (socket) => {
@@ -82,7 +99,7 @@ io.on("connection", (socket) => {
     socket.to(chatId).emit("stop typing", { chatId });
   });
 
-  // 🚪 LOGOUT (IMPORTANT)
+  // 🚪 LOGOUT
   socket.on("logout", (userId) => {
     if (onlineUsers.has(userId)) {
       onlineUsers.delete(userId);
