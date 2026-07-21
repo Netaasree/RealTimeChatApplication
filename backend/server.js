@@ -7,6 +7,7 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const User = require("./models/user");
 const Chat = require("./models/chat");
+const Message = require("./models/message");
 const messageRoutes = require("./routes/messageRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -18,6 +19,7 @@ connectDB();
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
   "https://real-time-chat-application-gilt-nine.vercel.app",
 ];
 const onlineUsers = new Map(); // user id -> Set of socket ids
@@ -68,12 +70,21 @@ io.on("connection", (socket) => {
     if (chat) socket.join(chatId);
   });
 
-  socket.on("new message", (message) => {
-    if (message?.sender?._id?.toString() !== userId || !message.chat?.users) return;
-    message.chat.users.forEach((member) => {
-      const memberId = (member._id || member).toString();
-      if (memberId !== userId) socket.to(memberId).emit("message received", message);
-    });
+  socket.on("new message", async (messageId) => {
+    try {
+      const message = await Message.findById(messageId)
+        .populate("sender", "name email")
+        .populate({ path: "chat", populate: { path: "users", select: "name email" } });
+
+      if (!message || message.sender._id.toString() !== userId) return;
+
+      message.chat.users.forEach((member) => {
+        const memberId = member._id.toString();
+        if (memberId !== userId) io.to(memberId).emit("message received", message);
+      });
+    } catch (error) {
+      console.error("Could not broadcast message:", error.message);
+    }
   });
 
   socket.on("typing", async ({ chatId }) => {

@@ -8,8 +8,13 @@ export const AuthProvider = ({ children }) => {
     JSON.parse(localStorage.getItem("userInfo"))
   );
 
+  const logout = () => {
+    localStorage.removeItem("userInfo");
+    setUser(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
+    <AuthContext.Provider value={{ user, setUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
