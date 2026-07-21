@@ -1,106 +1,52 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-
-
+import ThemeToggle from "../components/ThemeToggle";
 
 function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { setUser } = useAuth();
 
+  const submitHandler = async (event) => {
+    event.preventDefault();
+    setError("");
+    if (password !== confirmPassword) return setError("Passwords do not match.");
+    setIsLoading(true);
+    try {
+      const { data } = await API.post("/auth/register", { name, email, password });
+      sessionStorage.setItem("userInfo", JSON.stringify(data));
+      setUser(data);
+      navigate("/chat");
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Registration failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-
-  const submitHandler = async (e) => {
-  e.preventDefault();
-
-  if (password !== confirmPassword) {
-    alert("Passwords do not match");
-    return;
-  }
-
-  try {
-    const { data } = await API.post("/auth/register", {
-      name,
-      email,
-      password,
-    });
-
-    sessionStorage.setItem("userInfo", JSON.stringify(data));
-    setUser(data);
-    navigate("/chat");
-  } catch (error) {
-    alert(error.response?.data?.message || "Registration failed");
-  }
-};
-
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-          Register
-        </h2>
-
-        <form onSubmit={submitHandler} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Name"
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="Confirm Password"
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
-
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition"
-          >
-            Register
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-gray-500 mt-4">
-          Already have an account?{" "}
-          <Link to="/" className="text-indigo-600 font-semibold">
-            Login
-          </Link>
-        </p>
-      </div>
-    </div>
-  );
+  return <main className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-100 px-4 py-8 transition-colors duration-500 dark:bg-slate-950">
+    <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-indigo-400/30 blur-3xl dark:bg-indigo-500/20" /><div className="pointer-events-none absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-fuchsia-400/25 blur-3xl dark:bg-violet-500/20" />
+    <div className="absolute right-5 top-5"><ThemeToggle /></div>
+    <section className="relative w-full max-w-md animate-[authIn_.5s_ease-out] rounded-[2rem] border border-white/70 bg-white/80 p-7 shadow-2xl shadow-indigo-200/50 backdrop-blur-xl sm:p-9 dark:border-slate-700/80 dark:bg-slate-900/85 dark:shadow-black/30">
+      <div className="mb-7 text-center"><div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-2xl text-white shadow-lg shadow-indigo-300">✦</div><p className="text-xs font-black uppercase tracking-[0.24em] text-indigo-500">Join the conversation</p><h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">Create account</h1></div>
+      <form onSubmit={submitHandler} className="space-y-3.5">
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Name<input type="text" placeholder="Your name" value={name} onChange={(event) => setName(event.target.value)} required className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-indigo-500/20" /></label>
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Email<input type="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-indigo-500/20" /></label>
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Password<input type="password" placeholder="At least 6 characters" value={password} onChange={(event) => setPassword(event.target.value)} required className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-indigo-500/20" /></label>
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Confirm password<input type="password" placeholder="Repeat your password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-indigo-500/20" /></label>
+        {error && <p className="animate-[fadeIn_.2s_ease-out] rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600 dark:bg-rose-500/10">{error}</p>}
+        <button disabled={isLoading} className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3.5 font-bold text-white shadow-lg shadow-indigo-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-indigo-950">{isLoading ? "Creating account..." : "Create account →"}</button>
+      </form>
+      <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">Already have an account? <Link to="/" className="font-bold text-indigo-600 transition hover:text-violet-600 dark:text-indigo-400">Sign in</Link></p>
+    </section>
+  </main>;
 }
 
 export default Register;

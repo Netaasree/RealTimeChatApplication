@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { connectSocket, socket } from "../socket";
 import { useAuth } from "../context/AuthContext";
+import ThemeToggle from "../components/ThemeToggle";
 
 const getChatId = (chat) => String(chat?._id || chat || "");
 const getUserId = (user) => String(user?._id || user || "");
@@ -221,15 +222,15 @@ function Chat() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 p-3 text-slate-900 sm:p-5">
-      <section className="mx-auto flex h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl sm:h-[calc(100vh-2.5rem)]">
-        <aside className="flex w-80 shrink-0 flex-col border-r border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+    <main className="min-h-screen bg-slate-950 p-3 text-slate-900 transition-colors duration-500 sm:p-5 dark:bg-slate-950 dark:text-slate-100">
+      <section className="mx-auto flex h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl transition-colors duration-500 sm:h-[calc(100vh-2.5rem)] dark:border-slate-700 dark:bg-slate-900">
+        <aside className="flex w-80 shrink-0 flex-col border-r border-slate-200 bg-slate-50/80 p-4 transition-colors duration-500 sm:p-5 dark:border-slate-700 dark:bg-slate-900/95">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Messages</p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900">My Chats</h1>
             </div>
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-600 font-bold text-white shadow-lg shadow-indigo-200">{getInitial(userInfo.name)}</div>
+            <div className="flex items-center gap-2"><ThemeToggle /><div className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-600 font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950">{getInitial(userInfo.name)}</div></div>
           </div>
 
           <div className={`mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${socketConnected ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -258,9 +259,9 @@ function Chat() {
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col bg-slate-100">
+        <section className="flex min-w-0 flex-1 flex-col bg-slate-100 transition-colors duration-500 dark:bg-slate-950">
           {selectedChat ? <>
-            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 transition-colors duration-500 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center gap-3"><span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white">{getInitial(chatUser?.name)}<span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isUserOnline(chatUser?._id) ? "bg-emerald-400" : "bg-slate-300"}`} /></span><div><h2 className="font-extrabold">{chatUser?.name || "Chat"}</h2><p className="text-xs text-slate-500">{isUserOnline(chatUser?._id) ? "Online" : "Offline"}</p></div></div>
               <div className="relative">
                 <button onClick={() => setProfileMenuOpen((open) => !open)} aria-expanded={profileMenuOpen} aria-label="Open profile menu" className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-bold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
@@ -275,7 +276,7 @@ function Chat() {
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-5 sm:p-7">
+            <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-5 transition-colors duration-500 sm:p-7 dark:bg-[radial-gradient(circle_at_top,_#172554,_#020617_48%)]">
               {loadingMessages && <p className="text-center text-sm text-slate-400">Loading messages...</p>}
               {messages.map((message) => {
                 const mine = getUserId(message.sender) === getUserId(userInfo);
@@ -289,7 +290,7 @@ function Chat() {
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={sendMessage} className="flex gap-3 border-t border-slate-200 bg-white p-4">
+            <form onSubmit={sendMessage} className="flex gap-3 border-t border-slate-200 bg-white p-4 transition-colors duration-500 dark:border-slate-700 dark:bg-slate-900">
               <input value={content} onChange={handleTyping} placeholder="Write a message..." className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
               <button disabled={!content.trim() || isSending} className="rounded-2xl bg-indigo-600 px-5 font-bold text-white shadow-lg shadow-indigo-200 transition duration-200 hover:-translate-y-0.5 hover:bg-indigo-700 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none">{isSending ? "Sending..." : <>Send <span className="hidden sm:inline">↗</span></>}</button>
             </form>
