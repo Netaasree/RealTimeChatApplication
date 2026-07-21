@@ -1,128 +1,100 @@
 const cors = require("cors");
 const http = require("http");
+const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
+const express = require("express");
+const dotenv = require("dotenv");
+const connectDB = require("./config/db");
+const User = require("./models/user");
+const Chat = require("./models/chat");
 const messageRoutes = require("./routes/messageRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const authRoutes = require("./routes/authRoutes");
-const connectDB = require("./config/db");
-const express = require("express");
-const dotenv = require("dotenv");
 const userRoutes = require("./routes/userRoutes");
-
-const onlineUsers = new Map();
+const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 dotenv.config();
 connectDB();
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://real-time-chat-application-gilt-nine.vercel.app",
+];
+const onlineUsers = new Map(); // user id -> Set of socket ids
 const app = express();
 
-/* =======================
-   API CORS
-======================= */
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://real-time-chat-application-gilt-nine.vercel.app",
-    ],
-    credentials: true,
-  })
-);
-
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
-
-/* =======================
-   ROUTES
-======================= */
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/message", messageRoutes);
+app.get("/", (req, res) => res.send("API is running..."));
+app.use(notFound);
+app.use(errorHandler);
 
-app.get("/", (req, res) => {
-  res.send("API is running...");
-});
-
-const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
-
-/* =======================
-   SOCKET.IO
-======================= */
 const io = new Server(server, {
   pingTimeout: 60000,
-  cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://real-time-chat-application-gilt-nine.vercel.app",
-    ],
-    credentials: true,
-  },
+  cors: { origin: allowedOrigins, credentials: true },
+});
+
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error("Authentication required"));
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select("_id name");
+    if (!user) return next(new Error("Authentication required"));
+    socket.user = user;
+    next();
+  } catch {
+    next(new Error("Authentication required"));
+  }
 });
 
 io.on("connection", (socket) => {
-  console.log("Socket connected:", socket.id);
+  const userId = socket.user._id.toString();
+  socket.join(userId);
+  const sockets = onlineUsers.get(userId) || new Set();
+  const wasOffline = sockets.size === 0;
+  sockets.add(socket.id);
+  onlineUsers.set(userId, sockets);
+  socket.emit("online users", Array.from(onlineUsers.keys()));
+  if (wasOffline) socket.broadcast.emit("user online", userId);
 
-  /* 🔌 SETUP */
-  socket.on("setup", (userData) => {
-    socket.join(userData._id);
-    onlineUsers.set(userData._id, socket.id);
-
-    socket.emit("online users", Array.from(onlineUsers.keys()));
-    socket.broadcast.emit("user online", userData._id);
+  socket.on("join chat", async (chatId) => {
+    const chat = await Chat.exists({ _id: chatId, users: socket.user._id });
+    if (chat) socket.join(chatId);
   });
 
-  /* 💬 JOIN CHAT */
-  socket.on("join chat", (chatId) => {
-    socket.join(chatId);
-  });
-
-  /* 📩 NEW MESSAGE (FIXED & SAFE) */
-  socket.on("new message", (newMessage) => {
-    const chat = newMessage.chat;
-    if (!chat || !chat.users) return;
-
-    chat.users.forEach((u) => {
-      // handle both populated objects & ObjectIds
-      const userId =
-        typeof u === "object" && u._id
-          ? u._id.toString()
-          : u.toString();
-
-      if (userId === newMessage.sender._id.toString()) return;
-
-      socket.to(userId).emit("message received", newMessage);
+  socket.on("new message", (message) => {
+    if (message?.sender?._id?.toString() !== userId || !message.chat?.users) return;
+    message.chat.users.forEach((member) => {
+      const memberId = (member._id || member).toString();
+      if (memberId !== userId) socket.to(memberId).emit("message received", message);
     });
   });
 
-  /* ✍️ TYPING */
-  socket.on("typing", ({ chatId, userName }) => {
-    socket.to(chatId).emit("typing", { chatId, userName });
+  socket.on("typing", async ({ chatId }) => {
+    const chat = await Chat.exists({ _id: chatId, users: socket.user._id });
+    if (chat) socket.to(chatId).emit("typing", { chatId, userName: socket.user.name });
   });
 
-  socket.on("stop typing", ({ chatId }) => {
-    socket.to(chatId).emit("stop typing", { chatId });
+  socket.on("stop typing", async ({ chatId }) => {
+    const chat = await Chat.exists({ _id: chatId, users: socket.user._id });
+    if (chat) socket.to(chatId).emit("stop typing", { chatId });
   });
 
-  /* 🚪 LOGOUT */
-  socket.on("logout", (userId) => {
-    onlineUsers.delete(userId);
-    socket.broadcast.emit("user offline", userId);
-  });
-
-  /* ❌ DISCONNECT */
   socket.on("disconnect", () => {
-    for (let [userId, socketId] of onlineUsers.entries()) {
-      if (socketId === socket.id) {
-        onlineUsers.delete(userId);
-        socket.broadcast.emit("user offline", userId);
-        break;
-      }
+    const userSockets = onlineUsers.get(userId);
+    userSockets?.delete(socket.id);
+    if (!userSockets?.size) {
+      onlineUsers.delete(userId);
+      socket.broadcast.emit("user offline", userId);
     }
-    console.log("Socket disconnected:", socket.id);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

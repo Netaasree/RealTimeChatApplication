@@ -7,3 +7,8 @@ export const socket = io(ENDPOINT, {
   withCredentials: true,
   transports: ["websocket"],
 });
+
+export const connectSocket = (token) => {
+  socket.auth = { token };
+  if (!socket.connected) socket.connect();
+};

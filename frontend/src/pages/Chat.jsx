@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
-import { socket } from "../socket";
+import { connectSocket, socket } from "../socket";
 import { useAuth } from "../context/AuthContext";
 
 function Chat() {
@@ -19,6 +19,8 @@ function Chat() {
 
   const [typingUser, setTypingUser] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [loadingChats, setLoadingChats] = useState(true);
+  const [error, setError] = useState("");
 
   const selectedChatRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -29,14 +31,10 @@ function Chat() {
   useEffect(() => {
     if (!userInfo) return;
 
-    socket.connect();
-
-    socket.on("connect", () => {
-      socket.emit("setup", userInfo);
-    });
+    connectSocket(userInfo.token);
 
     return () => {
-      socket.off("connect");
+      socket.disconnect();
     };
   }, [userInfo]);
 
@@ -108,8 +106,14 @@ function Chat() {
   /* 📥 FETCH CHATS */
   useEffect(() => {
     const fetchChats = async () => {
-      const { data } = await API.get("/chat");
-      setChats(data);
+      try {
+        const { data } = await API.get("/chat");
+        setChats(data);
+      } catch (err) {
+        setError(err.response?.data?.message || "Could not load chats.");
+      } finally {
+        setLoadingChats(false);
+      }
     };
     fetchChats();
   }, []);
@@ -119,9 +123,13 @@ function Chat() {
     if (!selectedChat || !socket.connected) return;
 
     const fetchMessages = async () => {
-      const { data } = await API.get(`/message/${selectedChat._id}`);
-      setMessages(data);
-      socket.emit("join chat", selectedChat._id);
+      try {
+        const { data } = await API.get(`/message/${selectedChat._id}`);
+        setMessages(data);
+        socket.emit("join chat", selectedChat._id);
+      } catch (err) {
+        setError(err.response?.data?.message || "Could not load messages.");
+      }
     };
 
     fetchMessages();
@@ -137,17 +145,18 @@ function Chat() {
     e.preventDefault();
     if (!content.trim()) return;
 
-    const { data } = await API.post("/message", {
-      content,
-      chatId: selectedChat._id,
-    });
+    try {
+      const { data } = await API.post("/message", { content, chatId: selectedChat._id });
 
-    setMessages((prev) => [...prev, data]);
-    socket.emit("new message", data);
-    socket.emit("stop typing", { chatId: selectedChat._id });
+      setMessages((prev) => [...prev, data]);
+      socket.emit("new message", data);
+      socket.emit("stop typing", { chatId: selectedChat._id });
 
-    typingRef.current = false;
-    setContent("");
+      typingRef.current = false;
+      setContent("");
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not send message.");
+    }
   };
 
   /* ✍️ HANDLE TYPING */
@@ -159,7 +168,6 @@ function Chat() {
       typingRef.current = true;
       socket.emit("typing", {
         chatId: selectedChat._id,
-        userName: userInfo.name,
       });
     }
 
@@ -177,28 +185,33 @@ function Chat() {
       setSearchResults([]);
       return;
     }
-    const { data } = await API.get(`/users?search=${query}`);
-    setSearchResults(data);
+    try {
+      const { data } = await API.get(`/users?search=${encodeURIComponent(query)}`);
+      setSearchResults(data);
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not search users.");
+    }
   };
 
   /* ➕ ACCESS CHAT */
   const accessChat = async (userId) => {
-    const { data } = await API.post("/chat", { userId });
+    try {
+      const { data } = await API.post("/chat", { userId });
 
-    if (!chats.find((c) => c._id === data._id)) {
-      setChats([data, ...chats]);
+      if (!chats.find((c) => c._id === data._id)) setChats((prev) => [data, ...prev]);
+
+      setSelectedChat(data);
+      setSearch("");
+      setSearchResults([]);
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not start chat.");
     }
-
-    setSelectedChat(data);
-    setSearch("");
-    setSearchResults([]);
   };
 
   /* 🚪 LOGOUT */
   const handleLogout = () => {
-    socket.emit("logout", userInfo._id);
     socket.disconnect();
-    localStorage.clear();
+    localStorage.removeItem("userInfo");
     navigate("/", { replace: true });
   };
 
@@ -217,6 +230,9 @@ function Chat() {
           placeholder="Search users..."
           className="w-full border rounded px-3 py-2 mb-3"
         />
+
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        {loadingChats && <p className="text-sm text-gray-500">Loading chats...</p>}
 
         {searchResults.map((u) => (
           <div

@@ -7,6 +7,10 @@ const sendMessage = async (req, res) => {
 if (!content || !chatId) {
   return res.status(400).json({ message: "Content and chatId are required" });
 }
+const chat = await Chat.findOne({ _id: chatId, users: req.user._id });
+if (!chat) {
+  return res.status(403).json({ message: "You are not a member of this chat" });
+}
 
 let message = await Message.create({
   sender: req.user._id,
@@ -24,6 +28,10 @@ res.status(201).json(message);
 };
 
 const fetchMessages = async (req, res) => {
+const chat = await Chat.findOne({ _id: req.params.chatId, users: req.user._id });
+if (!chat) {
+  return res.status(403).json({ message: "You are not a member of this chat" });
+}
 const messages = await Message.find({
     chat: req.params.chatId,
   })

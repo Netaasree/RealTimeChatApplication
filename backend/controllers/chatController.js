@@ -1,10 +1,18 @@
 const Chat = require("../models/chat");
+const User = require("../models/user");
 
 const accessChat = async (req, res) => {
   const { userId } = req.body;
 
 if (!userId) {
   return res.status(400).json({ message: "UserId is required" });
+}
+if (userId === req.user._id.toString()) {
+  return res.status(400).json({ message: "You cannot start a chat with yourself" });
+}
+const recipient = await User.findById(userId);
+if (!recipient) {
+  return res.status(404).json({ message: "User not found" });
 }
 let chat = await Chat.findOne({
   isGroupChat: false,
