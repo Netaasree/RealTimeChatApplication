@@ -5,6 +5,7 @@ import { connectSocket, socket } from "../socket";
 import { useAuth } from "../context/AuthContext";
 
 const getChatId = (chat) => String(chat?._id || chat || "");
+const getUserId = (user) => String(user?._id || user || "");
 const getInitial = (name = "?") => name.trim().charAt(0).toUpperCase();
 
 function Chat() {
@@ -149,7 +150,7 @@ function Chat() {
   }, [messages, typingUser]);
 
   const isUserOnline = (userId) => onlineUsers.includes(String(userId));
-  const otherUser = (chat) => chat?.users?.find((person) => String(person._id) !== String(userInfo._id));
+  const otherUser = (chat) => chat?.users?.find((person) => getUserId(person) !== getUserId(userInfo));
   const chatUser = otherUser(selectedChat);
 
   const openChat = (chat) => {
@@ -274,11 +275,15 @@ function Chat() {
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-5">
+            <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-5 sm:p-7">
               {loadingMessages && <p className="text-center text-sm text-slate-400">Loading messages...</p>}
               {messages.map((message) => {
-                const mine = String(message.sender?._id) === String(userInfo._id);
-                return <div key={message._id} className={`mb-3 flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[75%] animate-[fadeIn_.2s_ease-out] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${mine ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white" : "rounded-bl-md bg-white text-slate-700"}`}><p className="break-words">{message.content}</p><p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p></div></div>;
+                const mine = getUserId(message.sender) === getUserId(userInfo);
+                const senderName = message.sender?.name || chatUser?.name || "Chat member";
+                return <div key={message._id} className={`mb-4 flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                  {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-indigo-600 shadow-sm">{getInitial(senderName)}</span>}
+                  <div className={`max-w-[75%] animate-[fadeIn_.24s_ease-out] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-transform duration-200 hover:scale-[1.01] ${mine ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white" : "rounded-bl-md border border-slate-100 bg-white text-slate-700"}`}><p className="break-words leading-relaxed">{message.content}</p><p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p></div>
+                </div>;
               })}
               {typingUser && <div className="mb-3 text-sm italic text-slate-500">{typingUser} is typing<span className="animate-pulse">...</span></div>}
               <div ref={messagesEndRef} />

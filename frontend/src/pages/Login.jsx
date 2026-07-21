@@ -18,7 +18,7 @@ function Login() {
       });
 
       // ✅ save user
-      localStorage.setItem("userInfo", JSON.stringify(data));
+      sessionStorage.setItem("userInfo", JSON.stringify(data));
       setUser(data);
 
       navigate("/chat");

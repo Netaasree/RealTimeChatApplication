@@ -31,7 +31,7 @@ function Register() {
       password,
     });
 
-    localStorage.setItem("userInfo", JSON.stringify(data));
+    sessionStorage.setItem("userInfo", JSON.stringify(data));
     setUser(data);
     navigate("/chat");
   } catch (error) {
