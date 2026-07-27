@@ -228,7 +228,7 @@ function Chat() {
           <div className="mb-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Messages</p>
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900">My Chats</h1>
+              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-white">My Chats</h1>
             </div>
             <div className="flex items-center gap-2"><ThemeToggle /><div className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-600 font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950">{getInitial(userInfo.name)}</div></div>
           </div>
@@ -240,7 +240,7 @@ function Chat() {
 
           <div className="relative mb-3">
             <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">⌕</span>
-            <input value={search} onChange={(event) => handleSearch(event.target.value)} placeholder="Find someone..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+            <input value={search} onChange={(event) => handleSearch(event.target.value)} placeholder="Find someone..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-400 dark:focus:ring-indigo-500/20" />
           </div>
 
           {searchResults.length > 0 && <div className="mb-3 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm">{searchResults.map((person) => <button key={person._id} onClick={() => accessChat(person._id)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-indigo-50"><span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-100 font-bold text-indigo-600">{getInitial(person.name)}</span>{person.name}</button>)}</div>}
@@ -257,12 +257,18 @@ function Chat() {
               </button>;
             })}
           </div>
+          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+            <button onClick={handleLogout} className="flex w-full items-center justify-between rounded-2xl border border-rose-100 bg-white px-3 py-3 text-left text-sm font-bold text-rose-600 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-rose-50 hover:shadow-md dark:border-rose-500/20 dark:bg-slate-800 dark:hover:bg-rose-500/10">
+              <span className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-xl bg-rose-50 text-base dark:bg-rose-500/10">↪</span>Log out</span>
+              <span className="text-rose-300">›</span>
+            </button>
+          </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col bg-slate-100 transition-colors duration-500 dark:bg-slate-950">
           {selectedChat ? <>
             <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 transition-colors duration-500 dark:border-slate-700 dark:bg-slate-900">
-              <div className="flex items-center gap-3"><span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white">{getInitial(chatUser?.name)}<span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isUserOnline(chatUser?._id) ? "bg-emerald-400" : "bg-slate-300"}`} /></span><div><h2 className="font-extrabold">{chatUser?.name || "Chat"}</h2><p className="text-xs text-slate-500">{isUserOnline(chatUser?._id) ? "Online" : "Offline"}</p></div></div>
+              <div className="flex items-center gap-3"><span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white">{getInitial(chatUser?.name)}<span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isUserOnline(chatUser?._id) ? "bg-emerald-400" : "bg-slate-300"}`} /></span><div><h2 className="font-extrabold dark:text-white">{chatUser?.name || "Chat"}</h2><p className="text-xs text-slate-500 dark:text-slate-400">{isUserOnline(chatUser?._id) ? "Online" : "Offline"}</p></div></div>
               <div className="relative">
                 <button onClick={() => setProfileMenuOpen((open) => !open)} aria-expanded={profileMenuOpen} aria-label="Open profile menu" className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-bold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
                   <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-xs text-white">{getInitial(userInfo.name)}</span>
@@ -291,10 +297,10 @@ function Chat() {
             </div>
 
             <form onSubmit={sendMessage} className="flex gap-3 border-t border-slate-200 bg-white p-4 transition-colors duration-500 dark:border-slate-700 dark:bg-slate-900">
-              <input value={content} onChange={handleTyping} placeholder="Write a message..." className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+              <input value={content} onChange={handleTyping} placeholder="Write a message..." className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/20" />
               <button disabled={!content.trim() || isSending} className="rounded-2xl bg-indigo-600 px-5 font-bold text-white shadow-lg shadow-indigo-200 transition duration-200 hover:-translate-y-0.5 hover:bg-indigo-700 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none">{isSending ? "Sending..." : <>Send <span className="hidden sm:inline">↗</span></>}</button>
             </form>
-          </> : <div className="grid flex-1 place-items-center bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-8 text-center"><div><div className="mx-auto mb-5 grid h-20 w-20 place-items-center rounded-3xl bg-indigo-600 text-4xl shadow-xl shadow-indigo-200">✦</div><h2 className="text-2xl font-black text-slate-800">Your conversations, alive.</h2><p className="mt-2 text-slate-500">Choose a chat or find someone to start messaging.</p></div></div>}
+          </> : <div className="grid flex-1 place-items-center bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-8 text-center transition-colors duration-500 dark:bg-[radial-gradient(circle_at_top,_#172554,_#020617_48%)]"><div><div className="mx-auto mb-5 grid h-20 w-20 place-items-center rounded-3xl bg-indigo-600 text-4xl shadow-xl shadow-indigo-200 dark:shadow-indigo-950">✦</div><h2 className="text-2xl font-black text-slate-800 dark:text-white">Your conversations, alive.</h2><p className="mt-2 text-slate-500 dark:text-slate-400">Choose a chat or find someone to start messaging.</p></div></div>}
         </section>
       </section>
     </main>
