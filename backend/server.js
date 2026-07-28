@@ -40,6 +40,7 @@ const io = new Server(server, {
   pingTimeout: 60000,
   cors: { origin: allowedOrigins, credentials: true },
 });
+app.set("io", io);
 
 io.use(async (socket, next) => {
   try {

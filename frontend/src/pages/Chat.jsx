@@ -9,6 +9,10 @@ const getChatId = (chat) => String(chat?._id || chat || "");
 const getUserId = (user) => String(user?._id || user || "");
 const getInitial = (name = "?") => name.trim().charAt(0).toUpperCase();
 
+const markMessagesAsRead = async (chatId) => {
+  await API.post(`/message/read/${chatId}`);
+};
+
 function Chat() {
   const { user: userInfo, logout } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +30,9 @@ function Chat() {
   const [error, setError] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [isUpdatingMessage, setIsUpdatingMessage] = useState(false);
 
   const selectedChatRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -89,9 +96,35 @@ function Chat() {
       setMessages((previous) => previous.some((message) => message._id === newMessage._id)
         ? previous
         : [...previous, newMessage]);
+      if (getUserId(newMessage.sender) !== getUserId(userInfo)) {
+        markMessagesAsRead(activeChatId).catch(() => {});
+      }
     };
     socket.on("message received", receiveMessage);
     return () => socket.off("message received", receiveMessage);
+  }, [userInfo]);
+
+  useEffect(() => {
+    const updateReadReceipts = ({ chatId, userId }) => {
+      if (getChatId(selectedChatRef.current) !== String(chatId)) return;
+      setMessages((previous) => previous.map((message) => {
+        if (getUserId(message.sender) === String(userId)) return message;
+        const alreadyRead = message.readBy?.some((reader) => getUserId(reader) === String(userId));
+        return alreadyRead ? message : { ...message, readBy: [...(message.readBy || []), { _id: userId }] };
+      }));
+    };
+    const updateMessage = (updatedMessage) => {
+      if (getChatId(selectedChatRef.current) !== getChatId(updatedMessage.chat)) return;
+      setMessages((previous) => previous.map((message) => message._id === updatedMessage._id ? updatedMessage : message));
+    };
+    socket.on("messages read", updateReadReceipts);
+    socket.on("message edited", updateMessage);
+    socket.on("message deleted", updateMessage);
+    return () => {
+      socket.off("messages read", updateReadReceipts);
+      socket.off("message edited", updateMessage);
+      socket.off("message deleted", updateMessage);
+    };
   }, []);
 
   useEffect(() => {
@@ -135,7 +168,10 @@ function Chat() {
     const loadMessages = async () => {
       try {
         const { data } = await API.get(`/message/${selectedChat._id}`);
-        if (!cancelled) setMessages(data);
+        if (!cancelled) {
+          setMessages(data);
+          markMessagesAsRead(selectedChat._id).catch(() => {});
+        }
       } catch (requestError) {
         if (!cancelled) setError(requestError.response?.data?.message || "Could not load messages.");
       } finally {
@@ -153,6 +189,17 @@ function Chat() {
   const isUserOnline = (userId) => onlineUsers.includes(String(userId));
   const otherUser = (chat) => chat?.users?.find((person) => getUserId(person) !== getUserId(userInfo));
   const chatUser = otherUser(selectedChat);
+  const lastOwnMessageId = [...messages].reverse().find((message) => getUserId(message.sender) === getUserId(userInfo))?._id;
+
+  const seenLabel = (message) => {
+    const readers = (message.readBy || []).filter((reader) => getUserId(reader) !== getUserId(userInfo));
+    if (!readers.length) return "";
+    if (selectedChat?.users?.length > 2) {
+      const names = readers.map((reader) => reader.name).filter(Boolean);
+      return names.length ? `Seen by ${names.join(", ")}` : `Seen by ${readers.length}`;
+    }
+    return "Seen ✓";
+  };
 
   const openChat = (chat) => {
     setSelectedChat(chat);
@@ -221,6 +268,35 @@ function Chat() {
     navigate("/", { replace: true });
   };
 
+  const startEditingMessage = (message) => {
+    setEditingMessageId(message._id);
+    setEditingContent(message.content);
+  };
+
+  const saveEditedMessage = async (messageId) => {
+    if (!editingContent.trim() || isUpdatingMessage) return;
+    try {
+      setIsUpdatingMessage(true);
+      const { data } = await API.put(`/message/${messageId}`, { content: editingContent });
+      setMessages((previous) => previous.map((message) => message._id === data._id ? data : message));
+      setEditingMessageId(null);
+      setEditingContent("");
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not edit message.");
+    } finally {
+      setIsUpdatingMessage(false);
+    }
+  };
+
+  const removeMessage = async (messageId) => {
+    try {
+      const { data } = await API.delete(`/message/${messageId}`);
+      setMessages((previous) => previous.map((message) => message._id === data._id ? data : message));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not delete message.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 p-3 text-slate-900 transition-colors duration-500 sm:p-5 dark:bg-slate-950 dark:text-slate-100">
       <section className="mx-auto flex h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl transition-colors duration-500 sm:h-[calc(100vh-2.5rem)] dark:border-slate-700 dark:bg-slate-900">
@@ -287,9 +363,18 @@ function Chat() {
               {messages.map((message) => {
                 const mine = getUserId(message.sender) === getUserId(userInfo);
                 const senderName = message.sender?.name || chatUser?.name || "Chat member";
+                const isEditing = editingMessageId === message._id;
+                const seen = mine && message._id === lastOwnMessageId ? seenLabel(message) : "";
                 return <div key={message._id} className={`mb-4 flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
                   {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-indigo-600 shadow-sm">{getInitial(senderName)}</span>}
-                  <div className={`max-w-[75%] animate-[fadeIn_.24s_ease-out] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-transform duration-200 hover:scale-[1.01] ${mine ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white" : "rounded-bl-md border border-slate-100 bg-white text-slate-700"}`}><p className="break-words leading-relaxed">{message.content}</p><p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p></div>
+                  <div className="group relative max-w-[75%]">
+                    <div className={`animate-[fadeIn_.24s_ease-out] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-transform duration-200 hover:scale-[1.01] ${mine ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white" : "rounded-bl-md border border-slate-100 bg-white text-slate-700"}`}>
+                      {isEditing ? <div className="min-w-52"><input value={editingContent} onChange={(event) => setEditingContent(event.target.value)} className="w-full rounded-lg border border-white/40 bg-white/15 px-2 py-1 text-white outline-none placeholder:text-indigo-100" autoFocus /><div className="mt-2 flex justify-end gap-2"><button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="text-xs text-indigo-100">Cancel</button><button onClick={() => saveEditedMessage(message._id)} className="rounded-md bg-white/20 px-2 py-1 text-xs font-bold">{isUpdatingMessage ? "Saving..." : "Save"}</button></div></div> : <p className={`break-words leading-relaxed ${message.isDeleted ? "italic opacity-70" : ""}`}>{message.isDeleted ? "This message was deleted" : message.content}</p>}
+                      <p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{message.editedAt && !message.isDeleted ? " (edited)" : ""}</p>
+                    </div>
+                    {mine && !message.isDeleted && !isEditing && <div className="absolute -left-20 top-1/2 hidden -translate-y-1/2 gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-lg group-hover:flex"><button onClick={() => startEditingMessage(message)} className="rounded px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">Edit</button><button onClick={() => removeMessage(message._id)} className="rounded px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button></div>}
+                    {seen && <p className="mt-1 text-right text-[10px] font-semibold text-indigo-500">{seen}</p>}
+                  </div>
                 </div>;
               })}
               {typingUser && <div className="mb-3 text-sm italic text-slate-500">{typingUser} is typing<span className="animate-pulse">...</span></div>}
