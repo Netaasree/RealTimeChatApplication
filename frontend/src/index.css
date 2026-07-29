@@ -43,6 +43,33 @@
   50% { transform: translate3d(0, 12px, 0); }
 }
 
+@keyframes springIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes waveform {
+  0%, 100% {
+    transform: scaleY(0.45);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
@@ -53,4 +80,14 @@ html {
 
 html.dark {
   background: #020617;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Space Grotesk", sans-serif;
 }
