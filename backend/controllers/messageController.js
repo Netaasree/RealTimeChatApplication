@@ -32,12 +32,30 @@ const chat = await Chat.findOne({ _id: req.params.chatId, users: req.user._id })
 if (!chat) {
   return res.status(403).json({ message: "You are not a member of this chat" });
 }
+if (!chat.isGroupChat) {
+  const result = await Message.updateMany(
+    {
+      chat: req.params.chatId,
+      sender: { $ne: req.user._id },
+      deliveredTo: { $ne: req.user._id },
+    },
+    { $addToSet: { deliveredTo: req.user._id } }
+  );
+
+  if (result.modifiedCount > 0) {
+    req.app.get("io").to(req.params.chatId).emit("message delivered", {
+      chatId: req.params.chatId,
+      userId: req.user._id.toString(),
+    });
+  }
+}
 const messages = await Message.find({
     chat: req.params.chatId,
   })
     .populate("sender", "name email")
     .populate("chat")
-    .populate("readBy", "name");
+    .populate("readBy", "name")
+    .populate("deliveredTo", "name");
 
   res.json(messages);
 };

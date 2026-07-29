@@ -1,5 +1,6 @@
 const Chat = require("../models/chat");
 const User = require("../models/user");
+const Message = require("../models/message");
 
 const populateGroupChat = async (chat) => {
   await chat.populate("users", "-password");
@@ -51,9 +52,19 @@ res.status(201).json(fullChat);
   })
     .populate("users", "-password")
     .populate("groupAdmin", "-password")
+    .populate({ path: "latestMessage", populate: { path: "sender", select: "name" } })
     .sort({ updatedAt: -1 });
 
-  res.json(chats);
+  const chatsWithUnreadCount = await Promise.all(chats.map(async (chat) => ({
+    ...chat.toObject(),
+    unreadCount: await Message.countDocuments({
+      chat: chat._id,
+      sender: { $ne: req.user._id },
+      readBy: { $ne: req.user._id },
+    }),
+  })));
+
+  res.json(chatsWithUnreadCount);
 };
 
 const createGroupChat = async (req, res) => {

@@ -83,6 +83,20 @@ io.on("connection", (socket) => {
         const memberId = member._id.toString();
         if (memberId !== userId) io.to(memberId).emit("message received", message);
       });
+
+      if (!message.chat.isGroupChat) {
+        message.chat.users.forEach(async (member) => {
+          const memberId = member._id.toString();
+          if (memberId !== userId && onlineUsers.has(memberId)) {
+            await Message.findByIdAndUpdate(messageId, { $addToSet: { deliveredTo: memberId } });
+            io.to(userId).emit("message delivered", {
+              chatId: message.chat._id.toString(),
+              messageId,
+              userId: memberId,
+            });
+          }
+        });
+      }
     } catch (error) {
       console.error("Could not broadcast message:", error.message);
     }
