@@ -1,6 +1,12 @@
 const Chat = require("../models/chat");
 const User = require("../models/user");
 
+const populateGroupChat = async (chat) => {
+  await chat.populate("users", "-password");
+  await chat.populate("groupAdmin", "-password");
+  return chat;
+};
+
 const accessChat = async (req, res) => {
   const { userId } = req.body;
 
@@ -44,10 +50,105 @@ res.status(201).json(fullChat);
     users: { $elemMatch: { $eq: req.user._id } },
   })
     .populate("users", "-password")
+    .populate("groupAdmin", "-password")
     .sort({ updatedAt: -1 });
 
   res.json(chats);
 };
 
+const createGroupChat = async (req, res) => {
+  const { name, users } = req.body;
+  if (!name?.trim()) {
+    return res.status(400).json({ message: "Group name is required" });
+  }
+  if (!Array.isArray(users)) {
+    return res.status(400).json({ message: "Add at least two other members" });
+  }
 
-module.exports = { accessChat, fetchChats};
+  const memberIds = [...new Set([...users.map(String), req.user._id.toString()])];
+  if (memberIds.length < 3) {
+    return res.status(400).json({ message: "Add at least two other members" });
+  }
+  const members = await User.find({ _id: { $in: memberIds } });
+  if (members.length !== memberIds.length) {
+    return res.status(404).json({ message: "One or more users were not found" });
+  }
+
+  let chat = await Chat.create({
+    chatName: name.trim(),
+    isGroupChat: true,
+    users: memberIds,
+    groupAdmin: req.user._id,
+  });
+  chat = await populateGroupChat(chat);
+
+  chat.users.forEach((member) => {
+    if (member._id.toString() !== req.user._id.toString()) {
+      req.app.get("io").to(member._id.toString()).emit("new chat", chat);
+    }
+  });
+
+  res.status(201).json(chat);
+};
+
+const renameGroup = async (req, res) => {
+  const { chatId, name } = req.body;
+  if (!name?.trim()) {
+    return res.status(400).json({ message: "Group name is required" });
+  }
+
+  let chat = await Chat.findById(chatId);
+  if (!chat || !chat.isGroupChat) {
+    return res.status(404).json({ message: "Group chat not found" });
+  }
+  if (chat.groupAdmin.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: "Only the group admin can rename this group" });
+  }
+
+  chat.chatName = name.trim();
+  await chat.save();
+  chat = await populateGroupChat(chat);
+  req.app.get("io").to(chat._id.toString()).emit("group updated", chat);
+  res.json(chat);
+};
+
+const addToGroup = async (req, res) => {
+  const { chatId, userId } = req.body;
+  let chat = await Chat.findById(chatId);
+  if (!chat || !chat.isGroupChat) {
+    return res.status(404).json({ message: "Group chat not found" });
+  }
+  if (chat.groupAdmin.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: "Only the group admin can add members" });
+  }
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  chat = await Chat.findByIdAndUpdate(chatId, { $addToSet: { users: userId } }, { new: true });
+  chat = await populateGroupChat(chat);
+  req.app.get("io").to(chat._id.toString()).emit("group updated", chat);
+  res.json(chat);
+};
+
+const removeFromGroup = async (req, res) => {
+  const { chatId, userId } = req.body;
+  let chat = await Chat.findById(chatId);
+  if (!chat || !chat.isGroupChat) {
+    return res.status(404).json({ message: "Group chat not found" });
+  }
+  if (chat.groupAdmin.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: "Only the group admin can remove members" });
+  }
+  if (chat.groupAdmin.toString() === userId) {
+    return res.status(400).json({ message: "Reassign admin before removing them" });
+  }
+
+  chat = await Chat.findByIdAndUpdate(chatId, { $pull: { users: userId } }, { new: true });
+  chat = await populateGroupChat(chat);
+  req.app.get("io").to(chat._id.toString()).emit("group updated", chat);
+  res.json(chat);
+};
+
+module.exports = { accessChat, fetchChats, createGroupChat, renameGroup, addToGroup, removeFromGroup};

@@ -1,6 +1,6 @@
-# Real-Time Chat Application
+# NovaChat
 
-A full-stack, one-to-one chat application built with the MERN stack and Socket.IO. It supports account registration, secure login, live messages, typing indicators, and online presence.
+NovaChat is a full-stack, one-to-one chat application built with the MERN stack and Socket.IO. It supports account registration, secure login, live messages, typing indicators, and online presence.
 
 ## Features
 

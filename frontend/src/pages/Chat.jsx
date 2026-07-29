@@ -33,6 +33,16 @@ function Chat() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState("");
   const [isUpdatingMessage, setIsUpdatingMessage] = useState(false);
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [groupResults, setGroupResults] = useState([]);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [renamingGroup, setRenamingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberResults, setMemberResults] = useState([]);
 
   const selectedChatRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -85,6 +95,22 @@ function Chat() {
       socket.off("online users", setOnline);
       socket.off("user online", userOnline);
       socket.off("user offline", userOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    const addNewChat = (chat) => {
+      setChats((previous) => previous.some((item) => item._id === chat._id) ? previous : [chat, ...previous]);
+    };
+    const updateGroup = (chat) => {
+      setChats((previous) => previous.map((item) => item._id === chat._id ? chat : item));
+      if (selectedChatRef.current?._id === chat._id) setSelectedChat(chat);
+    };
+    socket.on("new chat", addNewChat);
+    socket.on("group updated", updateGroup);
+    return () => {
+      socket.off("new chat", addNewChat);
+      socket.off("group updated", updateGroup);
     };
   }, []);
 
@@ -203,6 +229,8 @@ function Chat() {
 
   const openChat = (chat) => {
     setSelectedChat(chat);
+    setGroupInfoOpen(false);
+    setNewGroupName(chat.chatName || "");
     setError("");
   };
 
@@ -262,6 +290,74 @@ function Chat() {
     }
   };
 
+  const searchGroupUsers = async (query, setResults) => {
+    if (!query.trim()) return setResults([]);
+    try {
+      const { data } = await API.get(`/users?search=${encodeURIComponent(query)}`);
+      setResults(data);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not search users.");
+    }
+  };
+
+  const toggleGroupMember = (person) => {
+    setGroupMembers((previous) => previous.some((member) => member._id === person._id)
+      ? previous.filter((member) => member._id !== person._id)
+      : [...previous, person]);
+  };
+
+  const createGroup = async () => {
+    if (!groupName.trim() || groupMembers.length < 2) {
+      return setError("Enter a name and select at least two members.");
+    }
+    try {
+      const { data } = await API.post("/chat/group", { name: groupName, users: groupMembers.map((member) => member._id) });
+      setChats((previous) => previous.some((chat) => chat._id === data._id) ? previous : [data, ...previous]);
+      openChat(data);
+      setGroupModalOpen(false);
+      setGroupName("");
+      setGroupSearch("");
+      setGroupResults([]);
+      setGroupMembers([]);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not create group.");
+    }
+  };
+
+  const renameGroup = async () => {
+    if (!newGroupName.trim() || !selectedChat) return;
+    try {
+      const { data } = await API.put("/chat/rename", { chatId: selectedChat._id, name: newGroupName });
+      setSelectedChat(data);
+      setChats((previous) => previous.map((chat) => chat._id === data._id ? data : chat));
+      setRenamingGroup(false);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not rename group.");
+    }
+  };
+
+  const addGroupMember = async (userId) => {
+    try {
+      const { data } = await API.put("/chat/groupadd", { chatId: selectedChat._id, userId });
+      setSelectedChat(data);
+      setChats((previous) => previous.map((chat) => chat._id === data._id ? data : chat));
+      setMemberSearch("");
+      setMemberResults([]);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not add member.");
+    }
+  };
+
+  const removeGroupMember = async (userId) => {
+    try {
+      const { data } = await API.put("/chat/groupremove", { chatId: selectedChat._id, userId });
+      setSelectedChat(data);
+      setChats((previous) => previous.map((chat) => chat._id === data._id ? data : chat));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not remove member.");
+    }
+  };
+
   const handleLogout = () => {
     socket.disconnect();
     logout();
@@ -303,7 +399,8 @@ function Chat() {
         <aside className="flex w-80 shrink-0 flex-col border-r border-slate-200 bg-slate-50/80 p-4 transition-colors duration-500 sm:p-5 dark:border-slate-700 dark:bg-slate-900/95">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Messages</p>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-indigo-500">NovaChat</p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Messages</p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-white">My Chats</h1>
             </div>
             <div className="flex items-center gap-2"><ThemeToggle /><div className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-600 font-bold text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950">{getInitial(userInfo.name)}</div></div>
@@ -318,6 +415,7 @@ function Chat() {
             <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">⌕</span>
             <input value={search} onChange={(event) => handleSearch(event.target.value)} placeholder="Find someone..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-400 dark:focus:ring-indigo-500/20" />
           </div>
+          <button onClick={() => setGroupModalOpen(true)} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-sm font-bold text-indigo-700 transition hover:-translate-y-0.5 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"><span className="text-lg leading-none">+</span> New Group</button>
 
           {searchResults.length > 0 && <div className="mb-3 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm">{searchResults.map((person) => <button key={person._id} onClick={() => accessChat(person._id)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-indigo-50"><span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-100 font-bold text-indigo-600">{getInitial(person.name)}</span>{person.name}</button>)}</div>}
           {error && <p className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
@@ -327,9 +425,10 @@ function Chat() {
             {chats.map((chat) => {
               const person = otherUser(chat);
               const active = chat._id === selectedChat?._id;
+              const displayName = chat.isGroupChat ? chat.chatName : person?.name;
               return <button key={chat._id} onClick={() => openChat(chat)} className={`mb-1 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${active ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "hover:bg-white"}`}>
-                <span className={`relative grid h-10 w-10 place-items-center rounded-2xl font-bold ${active ? "bg-white/20" : "bg-indigo-100 text-indigo-600"}`}>{getInitial(person?.name)}<span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-50 ${isUserOnline(person?._id) ? "bg-emerald-400" : "bg-slate-300"}`} /></span>
-                <span className="min-w-0 flex-1"><span className="block truncate font-bold">{person?.name || "Unknown user"}</span><span className={`block truncate text-xs ${active ? "text-indigo-100" : "text-slate-400"}`}>{isUserOnline(person?._id) ? "Online now" : "Offline"}</span></span>
+                <span className={`relative grid h-10 w-10 place-items-center rounded-2xl font-bold ${active ? "bg-white/20" : "bg-indigo-100 text-indigo-600"}`}>{chat.isGroupChat ? "♟" : getInitial(person?.name)}{!chat.isGroupChat && <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-50 ${isUserOnline(person?._id) ? "bg-emerald-400" : "bg-slate-300"}`} />}</span>
+                <span className="min-w-0 flex-1"><span className="block truncate font-bold">{displayName || "Unknown user"}</span><span className={`block truncate text-xs ${active ? "text-indigo-100" : "text-slate-400"}`}>{chat.isGroupChat ? `${chat.users.length} members` : isUserOnline(person?._id) ? "Online now" : "Offline"}</span></span>
               </button>;
             })}
           </div>
@@ -344,7 +443,7 @@ function Chat() {
         <section className="flex min-w-0 flex-1 flex-col bg-slate-100 transition-colors duration-500 dark:bg-slate-950">
           {selectedChat ? <>
             <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 transition-colors duration-500 dark:border-slate-700 dark:bg-slate-900">
-              <div className="flex items-center gap-3"><span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white">{getInitial(chatUser?.name)}<span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isUserOnline(chatUser?._id) ? "bg-emerald-400" : "bg-slate-300"}`} /></span><div><h2 className="font-extrabold dark:text-white">{chatUser?.name || "Chat"}</h2><p className="text-xs text-slate-500 dark:text-slate-400">{isUserOnline(chatUser?._id) ? "Online" : "Offline"}</p></div></div>
+              <div className="flex items-center gap-3"><span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white">{selectedChat.isGroupChat ? "♟" : getInitial(chatUser?.name)}{!selectedChat.isGroupChat && <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isUserOnline(chatUser?._id) ? "bg-emerald-400" : "bg-slate-300"}`} />}</span><div><h2 className="font-extrabold dark:text-white">{selectedChat.isGroupChat ? selectedChat.chatName : chatUser?.name || "Chat"}</h2><p className="text-xs text-slate-500 dark:text-slate-400">{selectedChat.isGroupChat ? `${selectedChat.users.length} members` : isUserOnline(chatUser?._id) ? "Online" : "Offline"}</p></div>{selectedChat.isGroupChat && <button onClick={() => setGroupInfoOpen((open) => !open)} className="ml-1 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-600 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300">Group info</button>}</div>
               <div className="relative">
                 <button onClick={() => setProfileMenuOpen((open) => !open)} aria-expanded={profileMenuOpen} aria-label="Open profile menu" className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-bold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
                   <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-xs text-white">{getInitial(userInfo.name)}</span>
@@ -358,6 +457,13 @@ function Chat() {
               </div>
             </header>
 
+            {selectedChat.isGroupChat && groupInfoOpen && <div className="absolute right-6 top-24 z-20 w-80 max-w-[calc(100vw-2rem)] animate-[menuIn_.18s_ease-out] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">Group info</p><h3 className="font-black dark:text-white">{selectedChat.chatName}</h3></div><button onClick={() => setGroupInfoOpen(false)} className="rounded-lg px-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">×</button></div>
+              {getUserId(selectedChat.groupAdmin) === getUserId(userInfo) && <div className="mb-4 rounded-xl bg-indigo-50 p-3 dark:bg-indigo-500/10"><div className="flex gap-2">{renamingGroup ? <><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-indigo-200 bg-white px-2 py-1 text-sm text-slate-900 dark:border-indigo-500/30 dark:bg-slate-800 dark:text-white" /><button onClick={renameGroup} className="rounded-lg bg-indigo-600 px-2 text-xs font-bold text-white">Save</button></> : <button onClick={() => setRenamingGroup(true)} className="text-sm font-bold text-indigo-600 dark:text-indigo-300">Rename group</button>}</div><input value={memberSearch} onChange={(event) => { setMemberSearch(event.target.value); searchGroupUsers(event.target.value, setMemberResults); }} placeholder="Add a member..." className="mt-3 w-full rounded-lg border border-indigo-200 bg-white px-2 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-indigo-500/30 dark:bg-slate-800 dark:text-white" />{memberResults.filter((person) => !selectedChat.users.some((member) => member._id === person._id)).map((person) => <button key={person._id} onClick={() => addGroupMember(person._id)} className="mt-1 flex w-full items-center justify-between rounded-lg px-2 py-1 text-left text-sm hover:bg-white dark:hover:bg-slate-800"><span>{person.name}</span><span className="font-bold text-indigo-600">+</span></button>)}</div>}
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Members · {selectedChat.users.length}</p>
+              <div className="max-h-52 space-y-1 overflow-y-auto">{selectedChat.users.map((member) => <div key={member._id} className="flex items-center justify-between rounded-xl px-2 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"><span className="flex items-center gap-2 text-sm font-semibold dark:text-slate-200"><span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-100 text-xs text-indigo-600">{getInitial(member.name)}</span>{member.name}{getUserId(member) === getUserId(selectedChat.groupAdmin) && <span className="text-[10px] font-black uppercase text-indigo-500">Admin</span>}</span>{getUserId(selectedChat.groupAdmin) === getUserId(userInfo) && getUserId(member) !== getUserId(userInfo) && <button onClick={() => removeGroupMember(member._id)} className="text-xs font-bold text-rose-500">Remove</button>}</div>)}</div>
+            </div>}
+
             <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-5 transition-colors duration-500 sm:p-7 dark:bg-[radial-gradient(circle_at_top,_#172554,_#020617_48%)]">
               {loadingMessages && <p className="text-center text-sm text-slate-400">Loading messages...</p>}
               {messages.map((message) => {
@@ -369,6 +475,7 @@ function Chat() {
                   {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-indigo-600 shadow-sm">{getInitial(senderName)}</span>}
                   <div className="group relative max-w-[75%]">
                     <div className={`animate-[fadeIn_.24s_ease-out] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-transform duration-200 hover:scale-[1.01] ${mine ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white" : "rounded-bl-md border border-slate-100 bg-white text-slate-700"}`}>
+                      {selectedChat.isGroupChat && !mine && <p className="mb-1 text-[11px] font-black text-indigo-500">{senderName}</p>}
                       {isEditing ? <div className="min-w-52"><input value={editingContent} onChange={(event) => setEditingContent(event.target.value)} className="w-full rounded-lg border border-white/40 bg-white/15 px-2 py-1 text-white outline-none placeholder:text-indigo-100" autoFocus /><div className="mt-2 flex justify-end gap-2"><button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="text-xs text-indigo-100">Cancel</button><button onClick={() => saveEditedMessage(message._id)} className="rounded-md bg-white/20 px-2 py-1 text-xs font-bold">{isUpdatingMessage ? "Saving..." : "Save"}</button></div></div> : <p className={`break-words leading-relaxed ${message.isDeleted ? "italic opacity-70" : ""}`}>{message.isDeleted ? "This message was deleted" : message.content}</p>}
                       <p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{message.editedAt && !message.isDeleted ? " (edited)" : ""}</p>
                     </div>
@@ -388,6 +495,7 @@ function Chat() {
           </> : <div className="grid flex-1 place-items-center bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-8 text-center transition-colors duration-500 dark:bg-[radial-gradient(circle_at_top,_#172554,_#020617_48%)]"><div><div className="mx-auto mb-5 grid h-20 w-20 place-items-center rounded-3xl bg-indigo-600 text-4xl shadow-xl shadow-indigo-200 dark:shadow-indigo-950">✦</div><h2 className="text-2xl font-black text-slate-800 dark:text-white">Your conversations, alive.</h2><p className="mt-2 text-slate-500 dark:text-slate-400">Choose a chat or find someone to start messaging.</p></div></div>}
         </section>
       </section>
+      {groupModalOpen && <div className="fixed inset-0 z-30 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-sm"><div className="w-full max-w-md animate-[authIn_.22s_ease-out] rounded-3xl border border-white/50 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">NovaChat</p><h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">Create a group</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pick at least two people to start.</p></div><button onClick={() => setGroupModalOpen(false)} className="rounded-xl px-2 py-1 text-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">×</button></div><input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Group name" className="mb-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white" /><input value={groupSearch} onChange={(event) => { setGroupSearch(event.target.value); searchGroupUsers(event.target.value, setGroupResults); }} placeholder="Search people to add..." className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white" /><div className="mt-3 flex flex-wrap gap-2">{groupMembers.map((member) => <button key={member._id} onClick={() => toggleGroupMember(member)} className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">{member.name} ×</button>)}</div><div className="mt-3 max-h-44 space-y-1 overflow-y-auto">{groupResults.map((person) => { const selected = groupMembers.some((member) => member._id === person._id); return <button key={person._id} onClick={() => toggleGroupMember(person)} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${selected ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}><span className="font-semibold dark:text-slate-200">{person.name}</span><span className="font-bold">{selected ? "✓" : "+"}</span></button>; })}</div><button onClick={createGroup} className="mt-5 w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 font-bold text-white shadow-lg shadow-indigo-200 transition hover:-translate-y-0.5 dark:shadow-indigo-950">Create group</button></div></div>}
     </main>
   );
 }
