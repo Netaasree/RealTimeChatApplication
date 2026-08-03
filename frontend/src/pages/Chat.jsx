@@ -469,7 +469,22 @@ function Chat() {
           </div>
           <button onClick={() => setGroupModalOpen(true)} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-sm font-bold text-indigo-700 transition hover:-translate-y-0.5 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"><span className="text-lg leading-none">+</span> New Group</button>
 
-          {searchResults.length > 0 && <div className="mb-3 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm">{searchResults.map((person) => <button key={person._id} onClick={() => accessChat(person._id)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-indigo-50"><span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-100 font-bold text-indigo-600">{getInitial(person.name)}</span>{person.name}</button>)}</div>}
+          {searchResults.length > 0 && (
+            <div className="mb-3 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              {searchResults.map((person) => (
+                <button
+                  key={person._id}
+                  onClick={() => accessChat(person._id)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-800 transition hover:bg-indigo-50 dark:text-white dark:hover:bg-slate-700/70"
+                >
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-100 font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
+                    {getInitial(person.name)}
+                  </span>
+                  {person.name}
+                </button>
+              ))}
+            </div>
+          )}
           {error && <p className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -562,14 +577,14 @@ function Chat() {
                 )}
               </div>
               <div className="relative">
-                <button onClick={() => setProfileMenuOpen((open) => !open)} aria-expanded={profileMenuOpen} aria-label="Open profile menu" className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-bold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
-                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-xs text-white">{getInitial(userInfo.name)}</span>
+                <button onClick={() => setProfileMenuOpen((open) => !open)} aria-expanded={profileMenuOpen} aria-label="Open profile menu" className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-bold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-xs text-white dark:bg-indigo-600">{getInitial(userInfo.name)}</span>
                   <span className="hidden sm:inline">You</span>
                   <span className={`text-slate-400 transition ${profileMenuOpen ? "rotate-180" : ""}`}>⌄</span>
                 </button>
-                {profileMenuOpen && <div className="animate-[menuIn_.18s_ease-out] absolute right-0 top-12 z-20 w-64 origin-top-right rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-300/50">
-                  <div className="border-b border-slate-100 px-3 py-3"><p className="font-bold text-slate-800">{userInfo.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{userInfo.email}</p><p className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-bold ${socketConnected ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}><span className={`h-1.5 w-1.5 rounded-full ${socketConnected ? "bg-emerald-500" : "bg-amber-500"}`} />{socketConnected ? "Real-time online" : "Reconnecting"}</p></div>
-                  <button onClick={handleLogout} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-600 transition hover:bg-rose-50"><span className="text-base">↪</span> Log out</button>
+                {profileMenuOpen && <div className="animate-[menuIn_.18s_ease-out] absolute right-0 top-12 z-20 w-64 origin-top-right rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-300/50 dark:border-slate-700 dark:bg-slate-800 dark:shadow-black/50">
+                  <div className="border-b border-slate-100 px-3 py-3 dark:border-slate-700"><p className="font-bold text-slate-800 dark:text-white">{userInfo.name}</p><p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{userInfo.email}</p><p className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-bold ${socketConnected ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"}`}><span className={`h-1.5 w-1.5 rounded-full ${socketConnected ? "bg-emerald-500" : "bg-amber-500"}`} />{socketConnected ? "Real-time online" : "Reconnecting"}</p></div>
+                  <button onClick={handleLogout} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-500/10"><span className="text-base">↪</span> Log out</button>
                 </div>}
               </div>
             </header>
