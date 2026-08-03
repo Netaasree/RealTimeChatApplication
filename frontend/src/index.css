@@ -70,6 +70,30 @@
   }
 }
 
+@keyframes pulseRing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 162, 75, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(232, 162, 75, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 162, 75, 0);
+  }
+}
+
+@keyframes flashAmberPulse {
+  0%, 100% {
+    background-color: transparent;
+  }
+  25%, 75% {
+    background-color: rgba(232, 162, 75, 0.25);
+  }
+  50% {
+    background-color: rgba(232, 162, 75, 0.4);
+  }
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import API from "../services/api";
 import { connectSocket, socket } from "../socket";
 import { useAuth } from "../context/AuthContext";
@@ -26,6 +27,9 @@ function Chat() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [isInitialMessagesLoad, setIsInitialMessagesLoad] = useState(true);
+  const [justSent, setJustSent] = useState(false);
+  const [flashingChatIds, setFlashingChatIds] = useState({});
   const [socketConnected, setSocketConnected] = useState(socket.connected);
   const [error, setError] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -129,6 +133,14 @@ function Chat() {
           };
           return [updatedChat, ...previous.filter((item) => item._id !== incomingChatId)];
         });
+        setFlashingChatIds((previous) => ({ ...previous, [incomingChatId]: true }));
+        setTimeout(() => {
+          setFlashingChatIds((previous) => {
+            const next = { ...previous };
+            delete next[incomingChatId];
+            return next;
+          });
+        }, 1200);
         return;
       }
       setMessages((previous) => previous.some((message) => message._id === newMessage._id)
@@ -209,6 +221,7 @@ function Chat() {
     if (!selectedChat) return undefined;
     let cancelled = false;
     setLoadingMessages(true);
+    setIsInitialMessagesLoad(true);
     setMessages([]);
     setTypingUser(null);
     setError("");
@@ -220,6 +233,9 @@ function Chat() {
         if (!cancelled) {
           setMessages(data);
           markMessagesAsRead(selectedChat._id).catch(() => {});
+          setTimeout(() => {
+            if (!cancelled) setIsInitialMessagesLoad(false);
+          }, 500);
         }
       } catch (requestError) {
         if (!cancelled) setError(requestError.response?.data?.message || "Could not load messages.");
@@ -278,6 +294,8 @@ function Chat() {
       socket.emit("stop typing", { chatId: selectedChat._id });
       typingRef.current = false;
       setContent("");
+      setJustSent(true);
+      setTimeout(() => setJustSent(false), 500);
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Could not send message.");
     } finally {
@@ -457,11 +475,50 @@ function Chat() {
             {chats.map((chat) => {
               const person = otherUser(chat);
               const active = chat._id === selectedChat?._id;
+              const isFlashing = Boolean(flashingChatIds[chat._id]);
               const displayName = chat.isGroupChat ? chat.chatName : person?.name;
-              return <button key={chat._id} onClick={() => openChat(chat)} className={`mb-1 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${active ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "hover:bg-white"}`}>
-                <span className={`relative grid h-10 w-10 place-items-center rounded-2xl font-bold ${active ? "bg-white/20" : "bg-indigo-100 text-indigo-600"}`}>{chat.isGroupChat ? "♟" : getInitial(person?.name)}{!chat.isGroupChat && <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-50 ${isUserOnline(person?._id) ? "bg-amber" : "bg-slate-300"}`} />}</span>
-                <span className="min-w-0 flex-1"><span className="block truncate font-bold">{displayName || "Unknown user"}</span><span className={`block truncate text-xs ${active ? "text-indigo-100" : "text-slate-400"}`}>{chat.latestMessage?.content || "No messages yet"}</span></span>{chat.unreadCount > 0 && !active && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-indigo-600 px-1 text-[10px] font-black text-white">{chat.unreadCount}</span>}
-              </button>;
+              return (
+                <button
+                  key={chat._id}
+                  onClick={() => openChat(chat)}
+                  className={`group relative mb-1 flex w-full items-center rounded-2xl p-3 text-left transition ${
+                    isFlashing ? "animate-[flashAmberPulse_1.2s_ease-in-out_1]" : ""
+                  } ${active ? "text-white" : "hover:bg-white/70 dark:hover:bg-slate-800/60"}`}
+                >
+                  {active && (
+                    <Motion.div
+                      layoutId="activeChatIndicator"
+                      className="absolute inset-0 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-200 dark:shadow-indigo-950/50"
+                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                    />
+                  )}
+                  <div className="relative z-10 flex w-full items-center gap-3">
+                    <span className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl font-bold ${active ? "bg-white/20" : "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"}`}>
+                      {chat.isGroupChat ? "♟" : getInitial(person?.name)}
+                      {!chat.isGroupChat && (
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-50 dark:border-slate-800 ${
+                            isUserOnline(person?._id)
+                              ? "bg-amber animate-[pulseRing_2s_cubic-bezier(0.4,0,0.6,1)_infinite]"
+                              : "bg-slate-300 dark:bg-slate-600"
+                          }`}
+                        />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-bold">{displayName || "Unknown user"}</span>
+                      <span className={`block truncate text-xs ${active ? "text-indigo-100" : "text-slate-400 dark:text-slate-400"}`}>
+                        {chat.latestMessage?.content || "No messages yet"}
+                      </span>
+                    </span>
+                    {chat.unreadCount > 0 && !active && (
+                      <span className="grid h-5 min-w-5 place-items-center rounded-full bg-indigo-600 px-1 text-[10px] font-black text-white">
+                        {chat.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
             })}
           </div>
           <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
@@ -475,7 +532,33 @@ function Chat() {
         <section className="flex min-w-0 flex-1 flex-col bg-ivory/70 transition-colors duration-500 dark:bg-navy">
           {selectedChat ? <>
             <header className="flex items-center justify-between border-b border-navy/10 bg-ivory px-5 py-4 transition-colors duration-500 dark:border-ivory/10 dark:bg-navy">
-              <div className="flex items-center gap-3"><span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-navy font-bold text-ivory dark:bg-ivory dark:text-navy">{selectedChat.isGroupChat ? "♟" : getInitial(chatUser?.name)}{!selectedChat.isGroupChat && <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isUserOnline(chatUser?._id) ? "bg-amber" : "bg-slate-300"}`} />}</span><div><h2 className="font-display font-extrabold text-navy dark:text-ivory">{selectedChat.isGroupChat ? selectedChat.chatName : chatUser?.name || "Chat"}</h2><p className="text-xs text-slate-500 dark:text-slate-400">{selectedChat.isGroupChat ? `${selectedChat.users.length} members` : isUserOnline(chatUser?._id) ? "Online" : "Offline"}</p></div>{selectedChat.isGroupChat && <button onClick={() => setGroupInfoOpen((open) => !open)} className="ml-1 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-600 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300">Group info</button>}</div>
+              <div className="flex items-center gap-3">
+                <span className="relative grid h-10 w-10 place-items-center rounded-2xl bg-navy font-bold text-ivory dark:bg-ivory dark:text-navy">
+                  {selectedChat.isGroupChat ? "♟" : getInitial(chatUser?.name)}
+                  {!selectedChat.isGroupChat && (
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white dark:border-navy ${
+                        isUserOnline(chatUser?._id)
+                          ? "bg-amber animate-[pulseRing_2s_cubic-bezier(0.4,0,0.6,1)_infinite]"
+                          : "bg-slate-300 dark:bg-slate-600"
+                      }`}
+                    />
+                  )}
+                </span>
+                <div>
+                  <h2 className="font-display font-extrabold text-navy dark:text-ivory">
+                    {selectedChat.isGroupChat ? selectedChat.chatName : chatUser?.name || "Chat"}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {selectedChat.isGroupChat ? `${selectedChat.users.length} members` : isUserOnline(chatUser?._id) ? "Online" : "Offline"}
+                  </p>
+                </div>
+                {selectedChat.isGroupChat && (
+                  <button onClick={() => setGroupInfoOpen((open) => !open)} className="ml-1 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-600 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300">
+                    Group info
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <button onClick={() => setProfileMenuOpen((open) => !open)} aria-expanded={profileMenuOpen} aria-label="Open profile menu" className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-sm font-bold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
                   <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-xs text-white">{getInitial(userInfo.name)}</span>
@@ -498,33 +581,57 @@ function Chat() {
 
             <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#fffaf0,_#f5f1e8_45%)] p-5 transition-colors duration-500 sm:p-7 dark:bg-[radial-gradient(circle_at_top,_#15213a,_#0b1220_48%)]">
               {loadingMessages && <p className="text-center text-sm text-slate-400">Loading messages...</p>}
-              {messages.map((message) => {
-                const mine = getUserId(message.sender) === getUserId(userInfo);
-                const senderName = message.sender?.name || chatUser?.name || "Chat member";
-                const isEditing = editingMessageId === message._id;
-                const seen = mine && selectedChat?.isGroupChat && message._id === lastOwnMessageId ? seenLabel(message) : "";
-                const status = mine && !message.isDeleted ? messageStatus(message) : "";
-                const isRead = message.readBy?.some((reader) => getUserId(reader) === getUserId(otherUser(selectedChat)));
-                return <div key={message._id} className={`mb-4 flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
-                  {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-indigo-600 shadow-sm">{getInitial(senderName)}</span>}
-                  <div className="group relative max-w-[75%]">
-                    <div className={`animate-[springIn_.4s_cubic-bezier(0.34,1.56,0.64,1)] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-transform duration-200 hover:scale-[1.01] ${mine ? "rounded-br-md bg-navy text-ivory dark:bg-ivory dark:text-navy" : "rounded-bl-md border border-navy/5 bg-white text-slate-700 dark:border-ivory/10 dark:bg-navy/70 dark:text-ivory"}`}>
-                      {selectedChat.isGroupChat && !mine && <p className="mb-1 text-[11px] font-black text-indigo-500">{senderName}</p>}
-                      {isEditing ? <div className="min-w-52"><input value={editingContent} onChange={(event) => setEditingContent(event.target.value)} className="w-full rounded-lg border border-white/40 bg-white/15 px-2 py-1 text-white outline-none placeholder:text-indigo-100" autoFocus /><div className="mt-2 flex justify-end gap-2"><button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="text-xs text-indigo-100">Cancel</button><button onClick={() => saveEditedMessage(message._id)} className="rounded-md bg-white/20 px-2 py-1 text-xs font-bold">{isUpdatingMessage ? "Saving..." : "Save"}</button></div></div> : <p className={`break-words leading-relaxed ${message.isDeleted ? "italic opacity-70" : ""}`}>{message.isDeleted ? "This message was deleted" : message.content}</p>}
-                      <p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{message.editedAt && !message.isDeleted ? " (edited)" : ""}{status && <span className={`ml-1 font-black ${isRead ? "text-sky-300" : "text-indigo-200/70"}`}>{status}</span>}</p>
-                    </div>
-                    {mine && !message.isDeleted && !isEditing && <div className="absolute -left-20 top-1/2 hidden -translate-y-1/2 gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-lg group-hover:flex"><button onClick={() => startEditingMessage(message)} className="rounded px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">Edit</button><button onClick={() => removeMessage(message._id)} className="rounded px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button></div>}
-                    {seen && <p className="mt-1 text-right text-[10px] font-semibold text-indigo-500">{seen}</p>}
-                  </div>
-                </div>;
-              })}
+              <AnimatePresence mode="popLayout">
+                {messages.map((message, index) => {
+                  const mine = getUserId(message.sender) === getUserId(userInfo);
+                  const senderName = message.sender?.name || chatUser?.name || "Chat member";
+                  const isEditing = editingMessageId === message._id;
+                  const seen = mine && selectedChat?.isGroupChat && message._id === lastOwnMessageId ? seenLabel(message) : "";
+                  const status = mine && !message.isDeleted ? messageStatus(message) : "";
+                  const isRead = message.readBy?.some((reader) => getUserId(reader) === getUserId(otherUser(selectedChat)));
+                  return (
+                    <Motion.div
+                      key={message._id}
+                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{
+                        duration: 0.25,
+                        delay: isInitialMessagesLoad ? Math.min(index * 0.03, 0.3) : 0,
+                        ease: [0.34, 1.56, 0.64, 1],
+                      }}
+                      className={`mb-4 flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}
+                    >
+                      {!mine && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-indigo-600 shadow-sm">{getInitial(senderName)}</span>}
+                      <div className="group relative max-w-[75%]">
+                        <div className={`animate-[springIn_.4s_cubic-bezier(0.34,1.56,0.64,1)] rounded-2xl px-4 py-2.5 text-sm shadow-sm transition-transform duration-200 hover:scale-[1.01] ${mine ? "rounded-br-md bg-navy text-ivory dark:bg-ivory dark:text-navy" : "rounded-bl-md border border-navy/5 bg-white text-slate-700 dark:border-ivory/10 dark:bg-navy/70 dark:text-ivory"}`}>
+                          {selectedChat.isGroupChat && !mine && <p className="mb-1 text-[11px] font-black text-indigo-500">{senderName}</p>}
+                          {isEditing ? <div className="min-w-52"><input value={editingContent} onChange={(event) => setEditingContent(event.target.value)} className="w-full rounded-lg border border-white/40 bg-white/15 px-2 py-1 text-white outline-none placeholder:text-indigo-100" autoFocus /><div className="mt-2 flex justify-end gap-2"><button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="text-xs text-indigo-100">Cancel</button><button onClick={() => saveEditedMessage(message._id)} className="rounded-md bg-white/20 px-2 py-1 text-xs font-bold">{isUpdatingMessage ? "Saving..." : "Save"}</button></div></div> : <p className={`break-words leading-relaxed ${message.isDeleted ? "italic opacity-70" : ""}`}>{message.isDeleted ? "This message was deleted" : message.content}</p>}
+                          <p className={`mt-1 text-[10px] ${mine ? "text-indigo-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{message.editedAt && !message.isDeleted ? " (edited)" : ""}{status && <span className={`ml-1 font-black ${isRead ? "text-sky-300" : "text-indigo-200/70"}`}>{status}</span>}</p>
+                        </div>
+                        {mine && !message.isDeleted && !isEditing && <div className="absolute -left-20 top-1/2 hidden -translate-y-1/2 gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-lg group-hover:flex"><button onClick={() => startEditingMessage(message)} className="rounded px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">Edit</button><button onClick={() => removeMessage(message._id)} className="rounded px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button></div>}
+                        {seen && <p className="mt-1 text-right text-[10px] font-semibold text-indigo-500">{seen}</p>}
+                      </div>
+                    </Motion.div>
+                  );
+                })}
+              </AnimatePresence>
               {typingUser && <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-ivory/70"><span>{typingUser} is typing</span><span className="flex h-4 items-center gap-0.5"><span className="h-2 w-0.5 origin-center rounded-full bg-amber animate-[waveform_.7s_ease-in-out_infinite]" /><span className="h-3 w-0.5 origin-center rounded-full bg-amber animate-[waveform_.7s_ease-in-out_.12s_infinite]" /><span className="h-2 w-0.5 origin-center rounded-full bg-amber animate-[waveform_.7s_ease-in-out_.24s_infinite]" /><span className="h-3 w-0.5 origin-center rounded-full bg-amber animate-[waveform_.7s_ease-in-out_.36s_infinite]" /></span></div>}
               <div ref={messagesEndRef} />
             </div>
 
             <form onSubmit={sendMessage} className="flex gap-3 border-t border-navy/10 bg-ivory p-4 transition-colors duration-500 dark:border-ivory/10 dark:bg-navy">
               <input value={content} onChange={handleTyping} placeholder="Write a message..." className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/20" />
-              <button disabled={!content.trim() || isSending} className="rounded-2xl bg-navy px-5 font-bold text-ivory shadow-lg shadow-navy/20 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none dark:bg-ivory dark:text-navy dark:hover:bg-white">{isSending ? "Sending..." : <>Send <span className="hidden sm:inline">↗</span></>}</button>
+              <Motion.button
+                whileTap={{ scale: 0.94 }}
+                disabled={!content.trim() || isSending}
+                className={`rounded-2xl px-5 font-bold shadow-lg transition duration-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none ${
+                  justSent
+                    ? "bg-amber text-navy shadow-amber/30 dark:bg-amber dark:text-navy"
+                    : "bg-navy text-ivory shadow-navy/20 hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-ivory dark:text-navy dark:hover:bg-white"
+                }`}
+              >
+                {isSending ? "Sending..." : <>Send <span className="hidden sm:inline">↗</span></>}
+              </Motion.button>
             </form>
           </> : <div className="grid flex-1 place-items-center bg-[radial-gradient(circle_at_top,_#eef2ff,_#f8fafc_45%)] p-8 text-center transition-colors duration-500 dark:bg-[radial-gradient(circle_at_top,_#172554,_#020617_48%)]"><div><div className="mx-auto mb-5 grid h-20 w-20 place-items-center rounded-3xl bg-indigo-600 text-4xl shadow-xl shadow-indigo-200 dark:shadow-indigo-950">✦</div><h2 className="text-2xl font-black text-slate-800 dark:text-white">Your conversations, alive.</h2><p className="mt-2 text-slate-500 dark:text-slate-400">Choose a chat or find someone to start messaging.</p></div></div>}
         </section>
