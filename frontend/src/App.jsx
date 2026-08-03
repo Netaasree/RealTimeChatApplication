@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Chat from "./pages/Chat";
 import PageTransition from "./components/PageTransition";
+import StartupSplash from "./components/StartupSplash";
+import SignInTransition from "./components/SignInTransition";
 import { useAuth } from "./context/AuthContext";
+import { TransitionProvider } from "./context/TransitionContext";
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -59,10 +63,17 @@ function AnimatedRoutes() {
 }
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
-    <BrowserRouter>
-      <AnimatedRoutes />
-    </BrowserRouter>
+    <TransitionProvider>
+      <BrowserRouter>
+        {showSplash && <StartupSplash onComplete={() => setShowSplash(false)} />}
+        <AnimatedRoutes />
+        {/* Cinematic transition overlay — lives OUTSIDE routes, rendered via portal */}
+        <SignInTransition />
+      </BrowserRouter>
+    </TransitionProvider>
   );
 }
 
