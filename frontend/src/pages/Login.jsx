@@ -24,7 +24,6 @@ function Login() {
       navigate("/chat");
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Login failed. Please try again.");
-    } finally {
       setIsLoading(false);
     }
   };

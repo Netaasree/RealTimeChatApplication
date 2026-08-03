@@ -27,7 +27,6 @@ function Register() {
       navigate("/chat");
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Registration failed. Please try again.");
-    } finally {
       setIsLoading(false);
     }
   };
