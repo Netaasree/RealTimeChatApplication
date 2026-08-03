@@ -5,6 +5,7 @@ import API from "../services/api";
 import { connectSocket, socket } from "../socket";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
+import CursorField from "../components/CursorField";
 
 const getChatId = (chat) => String(chat?._id || chat || "");
 const getUserId = (user) => String(user?._id || user || "");
@@ -444,8 +445,9 @@ function Chat() {
   };
 
   return (
-    <main className="font-body min-h-screen bg-ivory p-3 text-navy transition-colors duration-500 sm:p-5 dark:bg-navy dark:text-ivory">
-      <section className="mx-auto flex h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-3xl border border-navy/10 bg-ivory shadow-2xl shadow-navy/15 transition-colors duration-500 sm:h-[calc(100vh-2.5rem)] dark:border-ivory/10 dark:bg-navy">
+    <main className="font-body relative min-h-screen overflow-hidden bg-ivory p-3 text-navy transition-colors duration-500 sm:p-5 dark:bg-navy dark:text-ivory">
+      <CursorField variant="chat" />
+      <section className="relative z-10 mx-auto flex h-[calc(100vh-1.5rem)] max-w-7xl overflow-hidden rounded-3xl border border-navy/10 bg-ivory shadow-2xl shadow-navy/15 transition-colors duration-500 sm:h-[calc(100vh-2.5rem)] dark:border-ivory/10 dark:bg-navy">
         <aside className="flex w-80 shrink-0 flex-col border-r border-navy/10 bg-ivory/90 p-4 transition-colors duration-500 sm:p-5 dark:border-ivory/10 dark:bg-navy/95">
           <div className="mb-5 flex items-center justify-between">
             <div>

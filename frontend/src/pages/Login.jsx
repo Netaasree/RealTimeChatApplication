@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
+import CursorField from "../components/CursorField";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -29,6 +30,7 @@ function Login() {
   };
 
   return <main className="font-body relative grid min-h-screen place-items-center overflow-hidden bg-ivory px-4 py-8 transition-colors duration-500 dark:bg-navy">
+    <CursorField variant="auth" enableClickBurst />
     <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-amber/30 blur-3xl animate-[float_.8s_ease-in-out] dark:bg-amber/15" />
     <div className="pointer-events-none absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-navy/15 blur-3xl dark:bg-ivory/10" />
     <div className="absolute right-5 top-5"><ThemeToggle /></div>
