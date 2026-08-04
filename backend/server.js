@@ -21,6 +21,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "https://real-time-chat-application-gilt-nine.vercel.app",
+  ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL, process.env.CLIENT_URL.replace(/\/$/, "")] : []),
 ];
 const onlineUsers = new Map(); // user id -> Set of socket ids
 const app = express();
