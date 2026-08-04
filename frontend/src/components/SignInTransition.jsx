@@ -1,16 +1,27 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { usePageTransition } from "../context/TransitionContext";
+import { createWaveField, INK_PALETTE } from "../utils/waveEngine";
 
 /**
- * Cinematic unseen.co-style page transition.
+ * Cinematic unseen.co-style page transition with liquid water canvas.
+ *
  * Rendered via createPortal into document.body so it's never clipped
  * by parent overflow or broken by framer-motion transforms.
  *
- * Phase 1: clip-path circle expands from button origin (0.7s)
- * Phase 2: branding reveal while navigation happens behind overlay (1.2s)
- * Phase 3: curtain wipes upward to reveal destination page (0.8s)
+ * Phase 1: clip-path circle expands from button origin (0.75s)
+ *          → wave engine seeds strong ripple + ink at origin
+ * Phase 2: branding reveal, navigation fires behind overlay (1.15s)
+ *          → simulation keeps running, turbulence visible
+ * Phase 3: curtain wipes upward (0.8s)
+ *          → second ripple burst as the surface recedes
+ *
+ * Canvas composites with mix-blend-mode: screen over the navy
+ * background so wave highlights bleed through the clip-path
+ * edge, making the boundary look turbulent instead of geometric.
+ *
+ * Falls back to clip-path-only when prefers-reduced-motion is set.
  */
 function SignInTransition() {
   const { transition, clearTransition } = usePageTransition();
@@ -18,6 +29,19 @@ function SignInTransition() {
 
   const [phase, setPhase] = useState(0);
   const timers = useRef([]);
+
+  // Canvas + wave engine refs
+  const canvasRef = useRef(null);
+  const fieldRef = useRef(null);
+  const rafRef = useRef(null);
+  const frameRef = useRef(0);
+  const tmpCanvasRef = useRef(null);
+
+  // Reduced-motion check (stable across renders)
+  const prefersReduced = useRef(
+    typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
 
   const clearTimers = () => {
     timers.current.forEach(clearTimeout);
@@ -28,36 +52,167 @@ function SignInTransition() {
     timers.current.push(setTimeout(fn, ms));
   };
 
+  /* ── Stop the wave render loop ── */
+  const stopWaveLoop = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    fieldRef.current = null;
+    frameRef.current = 0;
+  }, []);
+
+  /* ── Start the wave render loop ── */
+  const startWaveLoop = useCallback(
+    (originCx, originCy) => {
+      if (prefersReduced.current) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      canvas.width = vw;
+      canvas.height = vh;
+      canvas.style.width = `${vw}px`;
+      canvas.style.height = `${vh}px`;
+
+      const field = createWaveField(vw, vh);
+      fieldRef.current = field;
+      frameRef.current = 0;
+
+      // Scratch canvas for upscale blit
+      const tmp = document.createElement("canvas");
+      tmp.width = field.cols;
+      tmp.height = field.rows;
+      tmpCanvasRef.current = tmp;
+
+      // ── Phase-1 seed: strong ripple + ink at origin ──
+      field.ripple(originCx, originCy, 160);
+
+      // Staggered secondary ripples around origin
+      const offsets = [
+        { dx: -90, dy: -60, delay: 80, strength: 80 },
+        { dx: 110, dy: 40, delay: 160, strength: 70 },
+        { dx: -30, dy: 100, delay: 240, strength: 60 },
+      ];
+      offsets.forEach(({ dx, dy, delay, strength }) => {
+        setTimeout(() => {
+          if (!fieldRef.current) return;
+          fieldRef.current.ripple(originCx + dx, originCy + dy, strength);
+        }, delay);
+      });
+
+      // Ink blooms at origin — amber dominant, indigo + violet accents
+      field.ink(originCx / field.cellSize, originCy / field.cellSize, 35, INK_PALETTE[0], 0.45);
+      field.ink(
+        (originCx - 60) / field.cellSize,
+        (originCy + 30) / field.cellSize,
+        22, INK_PALETTE[1], 0.3,
+      );
+      field.ink(
+        (originCx + 50) / field.cellSize,
+        (originCy - 40) / field.cellSize,
+        18, INK_PALETTE[2], 0.25,
+      );
+
+      // Render loop
+      const render = () => {
+        frameRef.current += 1;
+        const f = fieldRef.current;
+        if (!f) return;
+
+        f.step(frameRef.current);
+
+        const raw = f.getImageData();
+        const imgData = new ImageData(
+          new Uint8ClampedArray(raw.buffer, raw.byteOffset, raw.byteLength),
+          f.cols,
+          f.rows,
+        );
+        const tCtx = tmpCanvasRef.current.getContext("2d");
+        tCtx.putImageData(imgData, 0, 0);
+
+        ctx.clearRect(0, 0, vw, vh);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(tmpCanvasRef.current, 0, 0, vw, vh);
+
+        rafRef.current = requestAnimationFrame(render);
+      };
+
+      rafRef.current = requestAnimationFrame(render);
+    },
+    [],
+  );
+
+  /* ── Phase 3 ripple burst (water receding) ── */
+  const seedExitRipples = useCallback(() => {
+    const f = fieldRef.current;
+    if (!f) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Burst across the top edge (curtain wipes up)
+    for (let i = 0; i < 5; i++) {
+      const rx = Math.random() * vw;
+      const ry = Math.random() * vh * 0.4;
+      f.ripple(rx, ry, 60 + Math.random() * 50);
+      const col = INK_PALETTE[Math.floor(Math.random() * 3)];
+      f.ink(rx / f.cellSize, ry / f.cellSize, 12 + Math.random() * 10, col, 0.2);
+    }
+  }, []);
+
+  /* ── Phase state machine ── */
   useEffect(() => {
     if (!active) {
       setPhase(0);
       clearTimers();
+      stopWaveLoop();
       return;
     }
 
-    // Phase 1: circle expanding
     setPhase(1);
 
-    // Phase 1 → 2: after circle expand completes
+    // Compute origin for canvas seeding
+    const ocx = originRect
+      ? originRect.x + originRect.width / 2
+      : window.innerWidth / 2;
+    const ocy = originRect
+      ? originRect.y + originRect.height / 2
+      : window.innerHeight / 2;
+
+    // Start wave canvas on next frame (after portal mounts canvas element)
+    requestAnimationFrame(() => startWaveLoop(ocx, ocy));
+
+    // Phase 1 → 2
     addTimer(() => {
       setPhase(2);
-      // Navigate NOW while overlay fully covers screen
       if (onNavigate) onNavigate();
     }, 750);
 
-    // Phase 2 → 3: branding lingers
-    addTimer(() => setPhase(3), 1900);
+    // Phase 2 → 3
+    addTimer(() => {
+      setPhase(3);
+      seedExitRipples();
+    }, 1900);
 
-    // Phase 3 → done: curtain exit finishes
+    // Phase 3 → done
     addTimer(() => {
       setPhase(0);
+      stopWaveLoop();
       clearTransition();
     }, 2700);
 
-    return clearTimers;
-  }, [active, onNavigate, clearTransition]);
+    return () => {
+      clearTimers();
+      stopWaveLoop();
+    };
+  }, [active, onNavigate, clearTransition, originRect, startWaveLoop, stopWaveLoop, seedExitRipples]);
 
-  // Circle origin from button center
+  // ── Clip-path geometry (unchanged) ──
   const cx = originRect
     ? originRect.x + originRect.width / 2
     : typeof window !== "undefined" ? window.innerWidth / 2 : 500;
@@ -65,11 +220,10 @@ function SignInTransition() {
     ? originRect.y + originRect.height / 2
     : typeof window !== "undefined" ? window.innerHeight / 2 : 400;
 
-  // Radius to cover full viewport from origin
   const vw = typeof window !== "undefined" ? window.innerWidth : 1000;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
   const maxR = Math.ceil(
-    Math.sqrt(Math.max(cx, vw - cx) ** 2 + Math.max(cy, vh - cy) ** 2)
+    Math.sqrt(Math.max(cx, vw - cx) ** 2 + Math.max(cy, vh - cy) ** 2),
   );
 
   const overlay = (
@@ -103,9 +257,7 @@ function SignInTransition() {
                   y: "-100vh",
                 }
           }
-          exit={{
-            opacity: 0,
-          }}
+          exit={{ opacity: 0 }}
           transition={
             phase === 1
               ? { duration: 0.7, ease: [0.76, 0, 0.24, 1] }
@@ -114,6 +266,22 @@ function SignInTransition() {
               : { duration: 0.75, ease: [0.76, 0, 0.24, 1] }
           }
         >
+          {/* ── Water canvas layer ── */}
+          {!prefersReduced.current && (
+            <canvas
+              ref={canvasRef}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                mixBlendMode: "screen",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            />
+          )}
+
           {/* Ambient glow */}
           <div
             style={{
@@ -127,6 +295,7 @@ function SignInTransition() {
                 "radial-gradient(circle, rgba(232,162,75,0.25) 0%, rgba(99,102,241,0.15) 50%, transparent 100%)",
               filter: "blur(60px)",
               pointerEvents: "none",
+              zIndex: 2,
             }}
           />
           <div
@@ -141,6 +310,7 @@ function SignInTransition() {
                 "radial-gradient(circle, rgba(139,92,246,0.18) 0%, transparent 70%)",
               filter: "blur(50px)",
               pointerEvents: "none",
+              zIndex: 2,
             }}
           />
 
@@ -152,6 +322,7 @@ function SignInTransition() {
               background:
                 "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(232,162,75,0.03) 3px, rgba(232,162,75,0.03) 4px)",
               pointerEvents: "none",
+              zIndex: 3,
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: [0, 0.2, 0] }}
@@ -197,7 +368,8 @@ function SignInTransition() {
                       "linear-gradient(135deg, #E8A24B 0%, #6366F1 50%, #8B5CF6 100%)",
                     fontSize: "2.5rem",
                     color: "white",
-                    boxShadow: "0 25px 50px rgba(232,162,75,0.3), 0 10px 30px rgba(99,102,241,0.2)",
+                    boxShadow:
+                      "0 25px 50px rgba(232,162,75,0.3), 0 10px 30px rgba(99,102,241,0.2)",
                   }}
                 >
                   ✦
@@ -304,7 +476,6 @@ function SignInTransition() {
     </AnimatePresence>
   );
 
-  // Portal into document.body to escape all parent clipping/transforms
   return createPortal(overlay, document.body);
 }
 
