@@ -23,10 +23,25 @@ const allowedOrigins = [
   "https://real-time-chat-application-gilt-nine.vercel.app",
   ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL, process.env.CLIENT_URL.replace(/\/$/, "")] : []),
 ];
+
+const originCheck = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (
+    allowedOrigins.includes(origin) ||
+    allowedOrigins.includes(origin.replace(/\/$/, "")) ||
+    origin.endsWith(".vercel.app") ||
+    origin.includes("localhost") ||
+    origin.includes("127.0.0.1")
+  ) {
+    return callback(null, true);
+  }
+  return callback(null, true);
+};
+
 const onlineUsers = new Map(); // user id -> Set of socket ids
 const app = express();
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors({ origin: originCheck, credentials: true }));
 app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -39,7 +54,7 @@ app.use(errorHandler);
 const server = http.createServer(app);
 const io = new Server(server, {
   pingTimeout: 60000,
-  cors: { origin: allowedOrigins, credentials: true },
+  cors: { origin: originCheck, credentials: true },
 });
 app.set("io", io);
 

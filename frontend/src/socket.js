@@ -1,11 +1,11 @@
 import { io } from "socket.io-client";
 
-const ENDPOINT = import.meta.env.VITE_API_URL;
+const ENDPOINT = import.meta.env.VITE_API_URL || undefined;
 
 export const socket = io(ENDPOINT, {
   autoConnect: false,
   withCredentials: true,
-  transports: ["websocket"],
+  transports: ["polling", "websocket"],
 });
 
 export const connectSocket = (token) => {
