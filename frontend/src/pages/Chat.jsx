@@ -67,7 +67,8 @@ function Chat() {
       if (activeChat) socket.emit("join chat", activeChat._id);
     };
     const handleDisconnect = () => setSocketConnected(false);
-    const handleConnectError = () => {
+    const handleConnectError = (err) => {
+      console.error("Socket connect_error:", err?.message || err);
       setSocketConnected(false);
       setError("Real-time connection failed. Retrying...");
     };

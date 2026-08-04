@@ -1,8 +1,12 @@
 import { io } from "socket.io-client";
 
-const ENDPOINT = import.meta.env.VITE_API_URL || undefined;
+const getEndpoint = () => {
+  let url = import.meta.env.VITE_API_URL || "";
+  url = url.trim().replace(/\/$/, "");
+  return url || undefined;
+};
 
-export const socket = io(ENDPOINT, {
+export const socket = io(getEndpoint(), {
   autoConnect: false,
   withCredentials: true,
   transports: ["polling", "websocket"],

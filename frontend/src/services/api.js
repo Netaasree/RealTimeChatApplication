@@ -1,8 +1,14 @@
 import axios from "axios";
 
+const getBaseUrl = () => {
+  let url = import.meta.env.VITE_API_URL || "";
+  url = url.trim().replace(/\/$/, "");
+  return url ? `${url}/api` : "/api";
+};
+
 const API = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL}/api`,
-  withCredentials: true
+  baseURL: getBaseUrl(),
+  withCredentials: true,
 });
 
 // Automatically attach token to every request
