@@ -27,15 +27,17 @@ function Register() {
     try {
       const { data } = await API.post("/auth/register", { name, email, password });
       sessionStorage.setItem("userInfo", JSON.stringify(data));
-      setUser(data);
 
-      // Capture button rect and fire cinematic transition
+      // Defer setUser until the overlay fully covers the screen (phase 2)
       let rect = null;
       if (btnRef.current) {
         const r = btnRef.current.getBoundingClientRect();
         rect = { x: r.left, y: r.top, width: r.width, height: r.height };
       }
-      triggerTransition(rect, () => navigate("/chat"));
+      triggerTransition(rect, () => {
+        setUser(data);
+        navigate("/chat");
+      });
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Registration failed. Please try again.");
       setIsLoading(false);
