@@ -35,7 +35,7 @@ const originCheck = (origin, callback) => {
   ) {
     return callback(null, true);
   }
-  return callback(null, true);
+  return callback(new Error("Not allowed by CORS"));
 };
 
 const onlineUsers = new Map(); // user id -> Set of socket ids
