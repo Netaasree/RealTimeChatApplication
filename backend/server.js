@@ -1,4 +1,5 @@
 const cors = require("cors");
+const helmet = require("helmet");
 const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
@@ -42,6 +43,7 @@ const onlineUsers = new Map(); // user id -> Set of socket ids
 const app = express();
 
 app.use(cors({ origin: originCheck, credentials: true }));
+app.use(helmet());
 app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

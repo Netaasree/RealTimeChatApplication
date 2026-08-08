@@ -2,12 +2,14 @@ const express = require("express");
 const { body } = require("express-validator");
 const { registerUser, authUser } = require("../controllers/authController");
 const validate = require("../middleware/validateMiddleware");
+const { authLimiter } = require("../middleware/rateLimitMiddleware");
 
 const router = express.Router();
 
 // ── POST /api/auth/register ──────────────────────────────────────────────────
 router.post(
   "/register",
+  authLimiter,
   [
     body("name")
       .trim()
@@ -28,6 +30,7 @@ router.post(
 // ── POST /api/auth/login ─────────────────────────────────────────────────────
 router.post(
   "/login",
+  authLimiter,
   [
     body("email")
       .notEmpty().withMessage("Email is required")
