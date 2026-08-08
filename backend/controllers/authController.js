@@ -5,20 +5,18 @@ const generateToken = require("../utils/generateToken");
    REGISTER USER
 ====================== */
 const registerUser = async (req, res) => {
+  // express-validator has already checked name/email/password
+  // and normalizeEmail() has lowercased + trimmed req.body.email.
   const { name, email, password } = req.body;
-  if (!name?.trim() || !email?.trim() || !password || password.length < 6) {
-    return res.status(400).json({ message: "Name, email, and a password of at least 6 characters are required" });
-  }
-  const normalizedEmail = email.trim().toLowerCase();
 
-  const userExists = await User.findOne({ email: normalizedEmail });
+  const userExists = await User.findOne({ email });
   if (userExists) {
     return res.status(400).json({ message: "User already exists" });
   }
 
   const user = await User.create({
     name: name.trim(),
-    email: normalizedEmail,
+    email,
     password,
   });
 
@@ -38,10 +36,8 @@ const registerUser = async (req, res) => {
    AUTH / LOGIN USER
 ====================== */
 const authUser = async (req, res) => {
+  // express-validator has already confirmed email + password are present.
   const { email, password } = req.body;
-  if (!email?.trim() || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
-  }
 
   const user = await User.findOne({ email: email.trim().toLowerCase() });
 
