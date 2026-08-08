@@ -12,6 +12,7 @@ const authLimiter = rateLimit({
   max: 10,                   // max 10 attempts per IP per window
   standardHeaders: true,     // send RateLimit-* headers (RFC 6585)
   legacyHeaders: false,      // disable X-RateLimit-* legacy headers
+  skip: () => process.env.NODE_ENV === "test", // bypass during Jest runs
   handler: (req, res) => {
     res.status(429).json({
       message: "Too many attempts, please try again later.",

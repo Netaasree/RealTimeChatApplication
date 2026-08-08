@@ -16,7 +16,12 @@ const userRoutes = require("./routes/userRoutes");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 dotenv.config();
-connectDB();
+
+// Only connect to the real DB and bind a port when running directly.
+// When imported by tests, they provide their own in-memory MongoDB.
+if (require.main === module) {
+  connectDB();
+}
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -140,5 +145,9 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+module.exports = app;
