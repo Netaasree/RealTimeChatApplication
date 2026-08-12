@@ -410,6 +410,16 @@ function Chat() {
     }
   };
 
+  const makeGroupAdmin = async (newAdminId) => {
+    try {
+      const { data } = await API.put("/chat/groupadmin", { chatId: selectedChat._id, newAdminId });
+      setSelectedChat(data);
+      setChats((previous) => previous.map((chat) => chat._id === data._id ? data : chat));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || "Could not transfer admin.");
+    }
+  };
+
   const handleLogout = () => {
     socket.disconnect();
     logout();
@@ -594,13 +604,31 @@ function Chat() {
               <div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">Group info</p><h3 className="font-black dark:text-white">{selectedChat.chatName}</h3></div><button onClick={() => setGroupInfoOpen(false)} className="rounded-lg px-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">×</button></div>
               {getUserId(selectedChat.groupAdmin) === getUserId(userInfo) && <div className="mb-4 rounded-xl bg-indigo-50 p-3 dark:bg-indigo-500/10"><div className="flex gap-2">{renamingGroup ? <><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-indigo-200 bg-white px-2 py-1 text-sm text-slate-900 dark:border-indigo-500/30 dark:bg-slate-800 dark:text-white" /><button onClick={renameGroup} className="rounded-lg bg-indigo-600 px-2 text-xs font-bold text-white">Save</button></> : <button onClick={() => setRenamingGroup(true)} className="text-sm font-bold text-indigo-600 dark:text-indigo-300">Rename group</button>}</div><input value={memberSearch} onChange={(event) => { setMemberSearch(event.target.value); searchGroupUsers(event.target.value, setMemberResults); }} placeholder="Add a member..." className="mt-3 w-full rounded-lg border border-indigo-200 bg-white px-2 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-indigo-500/30 dark:bg-slate-800 dark:text-white" />{memberResults.filter((person) => !selectedChat.users.some((member) => member._id === person._id)).map((person) => <button key={person._id} onClick={() => addGroupMember(person._id)} className="mt-1 flex w-full items-center justify-between rounded-lg px-2 py-1 text-left text-sm hover:bg-white dark:hover:bg-slate-800"><span>{person.name}</span><span className="font-bold text-indigo-600">+</span></button>)}</div>}
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Members · {selectedChat.users.length}</p>
-              <div className="max-h-52 space-y-1 overflow-y-auto">{selectedChat.users.map((member) => <div key={member._id} className="flex items-center justify-between rounded-xl px-2 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"><span className="flex items-center gap-2 text-sm font-semibold dark:text-slate-200"><span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-100 text-xs text-indigo-600">{getInitial(member.name)}</span>{member.name}{getUserId(member) === getUserId(selectedChat.groupAdmin) && <span className="text-[10px] font-black uppercase text-indigo-500">Admin</span>}</span>{getUserId(selectedChat.groupAdmin) === getUserId(userInfo) && getUserId(member) !== getUserId(userInfo) && <button onClick={() => removeGroupMember(member._id)} className="text-xs font-bold text-rose-500">Remove</button>}</div>)}</div>
+              <div className="max-h-52 space-y-1 overflow-y-auto">{selectedChat.users.map((member) => <div key={member._id} className="flex items-center justify-between rounded-xl px-2 py-2 hover:bg-slate-50 dark:hover:bg-slate-800"><span className="flex items-center gap-2 text-sm font-semibold dark:text-slate-200"><span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-100 text-xs text-indigo-600">{getInitial(member.name)}</span>{member.name}{getUserId(member) === getUserId(selectedChat.groupAdmin) && <span className="text-[10px] font-black uppercase text-indigo-500">Admin</span>}</span>{getUserId(selectedChat.groupAdmin) === getUserId(userInfo) && getUserId(member) !== getUserId(userInfo) && <span className="flex gap-2"><button onClick={() => makeGroupAdmin(member._id)} className="text-xs font-bold text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-200">Make Admin</button><button onClick={() => removeGroupMember(member._id)} className="text-xs font-bold text-rose-500">Remove</button></span>}</div>)}</div>
             </div>}
 
             <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_#fffaf0,_#f5f1e8_45%)] p-5 transition-colors duration-500 sm:p-7 dark:bg-[radial-gradient(circle_at_top,_#15213a,_#0b1220_48%)]">
               {loadingMessages && <p className="text-center text-sm text-slate-400">Loading messages...</p>}
               <AnimatePresence mode="popLayout">
                 {messages.map((message, index) => {
+                  /* ── System messages (admin changes, etc.) ── */
+                  if (message.isSystemMessage) {
+                    return (
+                      <Motion.div
+                        key={message._id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="mb-4 flex justify-center"
+                      >
+                        <span className="rounded-lg bg-indigo-100/80 px-3 py-1.5 text-center text-xs font-semibold text-indigo-700 shadow-sm dark:bg-indigo-500/15 dark:text-indigo-300">
+                          🔒 {message.content}
+                        </span>
+                      </Motion.div>
+                    );
+                  }
+
+                  /* ── Normal user messages ── */
                   const mine = getUserId(message.sender) === getUserId(userInfo);
                   const senderName = message.sender?.name || chatUser?.name || "Chat member";
                   const isEditing = editingMessageId === message._id;

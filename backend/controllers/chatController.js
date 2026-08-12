@@ -162,4 +162,51 @@ const removeFromGroup = async (req, res) => {
   res.json(chat);
 };
 
-module.exports = { accessChat, fetchChats, createGroupChat, renameGroup, addToGroup, removeFromGroup};
+const updateGroupAdmin = async (req, res) => {
+  const { chatId, newAdminId } = req.body;
+
+  let chat = await Chat.findById(chatId);
+  if (!chat || !chat.isGroupChat) {
+    return res.status(404).json({ message: "Group chat not found" });
+  }
+  if (chat.groupAdmin.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: "Only the group admin can reassign admin rights" });
+  }
+  if (!chat.users.some((u) => u.toString() === newAdminId)) {
+    return res.status(400).json({ message: "New admin must be a member of the group" });
+  }
+  if (chat.groupAdmin.toString() === newAdminId) {
+    return res.status(400).json({ message: "This user is already the group admin" });
+  }
+
+  // Look up old admin's name before overwriting
+  const oldAdmin = await User.findById(chat.groupAdmin).select("name");
+  const newAdmin = await User.findById(newAdminId).select("name");
+
+  chat.groupAdmin = newAdminId;
+  await chat.save();
+  chat = await populateGroupChat(chat);
+
+  // Create a WhatsApp-style system message
+  const systemContent = `${oldAdmin.name} changed admin from ${oldAdmin.name} to ${newAdmin.name}`;
+  let systemMsg = await Message.create({
+    sender: req.user._id,
+    content: systemContent,
+    chat: chatId,
+    isSystemMessage: true,
+  });
+  systemMsg = await systemMsg.populate("sender", "name email");
+  systemMsg = await systemMsg.populate("chat");
+  await Chat.findByIdAndUpdate(chatId, { latestMessage: systemMsg });
+
+  // Broadcast the system message to every member in real time
+  const io = req.app.get("io");
+  chat.users.forEach((member) => {
+    io.to(member._id.toString()).emit("message received", systemMsg);
+  });
+
+  io.to(chat._id.toString()).emit("group updated", chat);
+  res.json(chat);
+};
+
+module.exports = { accessChat, fetchChats, createGroupChat, renameGroup, addToGroup, removeFromGroup, updateGroupAdmin };

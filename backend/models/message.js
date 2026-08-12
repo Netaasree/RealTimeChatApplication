@@ -37,6 +37,10 @@ const messageSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    isSystemMessage: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
